@@ -10,7 +10,7 @@ from unittest.mock import patch
 from test_curve_pipeline import moex_params
 
 HAS_DEPS = all(
-    importlib.util.find_spec(m) for m in ("fastapi", "httpx", "psycopg", "sqlalchemy")
+    importlib.util.find_spec(m) for m in ("fastapi", "httpx", "psycopg", "redis", "rq", "sqlalchemy")
 )
 
 if HAS_DEPS:
@@ -100,6 +100,25 @@ class ApiTests(unittest.TestCase):
             "name": "x", "amount": 1, "rate": 1, "maturity_months": 3, "repricing_months": 6,
         })
         self.assertEqual(response.status_code, 422)
+
+    def test_calculate_for_date(self):
+        with patch(FETCH, return_value=moex_params()) as fetch:
+            response = self.client.post(
+                "/api/v1/curves/calculate", params={"trade_date": "2026-08-31"}
+            )
+        self.assertEqual(response.status_code, 200)
+        fetch.assert_called_once_with(date(2026, 8, 31))
+
+    def test_rebuild_is_queued(self):
+        snapshot_id = self.calculate().json()["id"]
+        with patch("api.routers.curves.Queue") as queue:
+            queue.return_value.enqueue.return_value.id = "job-1"
+            response = self.client.post(f"/api/v1/curves/{snapshot_id}/rebuild")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json(), {"task_id": "job-1", "status": "queued"})
+
+    def test_rebuild_of_missing_snapshot(self):
+        self.assertEqual(self.client.post("/api/v1/curves/999/rebuild").status_code, 404)
 
     def test_moex_failure_returns_502(self):
         with patch(FETCH, side_effect=httpx.ConnectError("no network")):

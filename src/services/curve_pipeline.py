@@ -2,6 +2,8 @@
 Загрузка кривой MOEX и расчёт базовой и сдвинутых кривых.
 Единый конвейер для DAG, воркера и демо-скрипта.
 """
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from db.models import CurveSnapshot
@@ -11,9 +13,9 @@ from domain.curve.shifts import apply_shift
 from domain.moex.client import fetch_curve_from_moex
 
 
-def load_curve(session: Session) -> CurveSnapshot:
-    """Скачать параметры MOEX и создать снимок."""
-    params = fetch_curve_from_moex()
+def load_curve(session: Session, trade_date: date | None = None) -> CurveSnapshot:
+    """Скачать параметры MOEX (свежие или за trade_date) и создать снимок."""
+    params = fetch_curve_from_moex(trade_date)
     trade_date = params.pop("trade_date")
     return curve_repo.create_snapshot(session, trade_date=trade_date, params=params)
 
