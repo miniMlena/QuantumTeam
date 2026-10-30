@@ -5,10 +5,7 @@
 используем классическую NS-модель, а G-члены игнорируем).
 """
 import math
-from domain.constants import (
-    STANDARD_TENORS_MONTHS,
-    MOEX_OBSERVED_TENORS_MONTHS,
-)
+from domain.constants import BUCKETS
 
 
 def nelson_siegel_rate(
@@ -38,34 +35,16 @@ def nelson_siegel_rate(
 def build_base_curve(params: dict) -> list[dict]:
     """
     params: {b1, b2, b3, t1}
-    Возвращает список точек:
-      [{"tenor_months": int, "rate": float, "point_type": str}, ...]
-    point_type:
-      - "observed"     — тенор входит в эталонную сетку MOEX
-      - "interpolated" — между эталонными узлами
-      - "extrapolated" — за пределами эталонной сетки
+    Возвращает по точке на каждый бакет:
+      [{"bucket_code": str, "tenor_years": float, "rate": float}, ...]
     """
     b1, b2, b3, t1 = params["b1"], params["b2"], params["b3"], params["t1"]
-    min_obs = min(MOEX_OBSERVED_TENORS_MONTHS)
-    max_obs = max(MOEX_OBSERVED_TENORS_MONTHS)
 
-    points = []
-    for tenor_months in STANDARD_TENORS_MONTHS:
-        tenor_years = tenor_months / 12.0
-        rate = nelson_siegel_rate(tenor_years, b1, b2, b3, t1)
-        points.append({
-            "tenor_months": tenor_months,
-            "rate": rate,
-            "point_type": _classify_point_type(tenor_months, min_obs, max_obs),
-        })
-    return points
-
-
-def _classify_point_type(
-    tenor_months: int, min_obs: int, max_obs: int
-) -> str:
-    if tenor_months in MOEX_OBSERVED_TENORS_MONTHS:
-        return "observed"
-    if tenor_months < min_obs or tenor_months > max_obs:
-        return "extrapolated"
-    return "interpolated"
+    return [
+        {
+            "bucket_code": bucket.code,
+            "tenor_years": bucket.tenor_years,
+            "rate": nelson_siegel_rate(bucket.tenor_years, b1, b2, b3, t1),
+        }
+        for bucket in BUCKETS
+    ]

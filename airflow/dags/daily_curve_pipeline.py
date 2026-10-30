@@ -45,8 +45,8 @@ def _apply_scenarios(**ctx):
     snapshot_id = ctx["ti"].xcom_pull(key="snapshot_id")
     with SessionLocal() as session:
         base = [
-            {"tenor_months": p.tenor_months, "rate": float(p.rate),
-             "point_type": p.point_type}
+            {"bucket_code": p.bucket_code, "tenor_years": float(p.tenor_years),
+             "rate": float(p.rate)}
             for p in curve_repo.get_base_points(session, snapshot_id)
         ]
         for sc in scenario_repo.list_scenarios(session, only_active=True):

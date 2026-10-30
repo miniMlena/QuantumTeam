@@ -43,14 +43,14 @@ def mark_snapshot_status(
 def save_base_points(
     session: Session,
     snapshot_id: int,
-    points: list[dict], # [{tenor_months, rate, point_type}]
+    points: list[dict], # [{bucket_code, tenor_years, rate}]
 ) -> None:
     session.add_all([
         BaseCurvePoint(
             snapshot_id=snapshot_id,
-            tenor_months=p["tenor_months"],
+            bucket_code=p["bucket_code"],
+            tenor_years=Decimal(str(p["tenor_years"])),
             rate=Decimal(str(p["rate"])),
-            point_type=p["point_type"],
         )
         for p in points
     ])
@@ -61,16 +61,16 @@ def save_shifted_points(
     session: Session,
     snapshot_id: int,
     scenario_id: int,
-    points: list[dict], # [{tenor_months, shifted_rate, shift_bp, point_type}]
+    points: list[dict], # [{bucket_code, tenor_years, shifted_rate, shift_bp}]
 ) -> None:
     session.add_all([
         ShiftedCurvePoint(
             snapshot_id=snapshot_id,
             scenario_id=scenario_id,
-            tenor_months=p["tenor_months"],
+            bucket_code=p["bucket_code"],
+            tenor_years=Decimal(str(p["tenor_years"])),
             shifted_rate=Decimal(str(p["shifted_rate"])),
             shift_bp=Decimal(str(p["shift_bp"])),
-            point_type=p["point_type"],
         )
         for p in points
     ])
@@ -81,7 +81,7 @@ def get_base_points(session: Session, snapshot_id: int) -> list[BaseCurvePoint]:
     return list(session.scalars(
         select(BaseCurvePoint)
         .where(BaseCurvePoint.snapshot_id == snapshot_id)
-        .order_by(BaseCurvePoint.tenor_months)
+        .order_by(BaseCurvePoint.tenor_years)
     ))
 
 
@@ -94,5 +94,5 @@ def get_shifted_points(
             ShiftedCurvePoint.snapshot_id == snapshot_id,
             ShiftedCurvePoint.scenario_id == scenario_id,
         )
-        .order_by(ShiftedCurvePoint.tenor_months)
+        .order_by(ShiftedCurvePoint.tenor_years)
     ))

@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class ScenarioShiftIn(BaseModel):
-    tenor_months: int
+    tenor_years: Decimal
     shift_bp: Decimal
 
 

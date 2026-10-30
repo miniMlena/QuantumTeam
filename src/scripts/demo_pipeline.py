@@ -23,35 +23,33 @@ def ensure_default_scenarios(session):
         {
             "code": "parallel_up", "name": "Parallel +100 bp",
             "scenario_type": "parallel", "is_regulatory": True,
-            "shifts": [{"tenor_months": t, "shift_bp": 100}
-                       for t in (1, 3, 6, 12, 24, 60, 120, 240, 360)],
+            "shifts": [{"tenor_years": 0.0028, "shift_bp": 100}],
         },
         {
             "code": "parallel_down", "name": "Parallel -100 bp",
             "scenario_type": "parallel", "is_regulatory": True,
-            "shifts": [{"tenor_months": t, "shift_bp": -100}
-                       for t in (1, 3, 6, 12, 24, 60, 120, 240, 360)],
+            "shifts": [{"tenor_years": 0.0028, "shift_bp": -100}],
         },
         {
             "code": "twist_steep", "name": "Steepener (short -50, long +50)",
             "scenario_type": "twist", "is_regulatory": False,
             "shifts": [
-                {"tenor_months": 1,   "shift_bp": -50},
-                {"tenor_months": 12,  "shift_bp": -25},
-                {"tenor_months": 60,  "shift_bp": 0},
-                {"tenor_months": 120, "shift_bp": 25},
-                {"tenor_months": 360, "shift_bp": 50},
+                {"tenor_years": 0.0028, "shift_bp": -50},
+                {"tenor_years": 1,      "shift_bp": -25},
+                {"tenor_years": 5,      "shift_bp": 0},
+                {"tenor_years": 10,     "shift_bp": 25},
+                {"tenor_years": 25,     "shift_bp": 50},
             ],
         },
         {
             "code": "curvature", "name": "Curvature (belly +50)",
             "scenario_type": "curvature", "is_regulatory": False,
             "shifts": [
-                {"tenor_months": 1,   "shift_bp": 0},
-                {"tenor_months": 24,  "shift_bp": 50},
-                {"tenor_months": 60,  "shift_bp": 50},
-                {"tenor_months": 120, "shift_bp": 0},
-                {"tenor_months": 360, "shift_bp": 0},
+                {"tenor_years": 0.0028, "shift_bp": 0},
+                {"tenor_years": 2,      "shift_bp": 50},
+                {"tenor_years": 5,      "shift_bp": 50},
+                {"tenor_years": 10,     "shift_bp": 0},
+                {"tenor_years": 25,     "shift_bp": 0},
             ],
         },
     ]
@@ -92,11 +90,7 @@ def main() -> int:
             log("3/5", "building base curve (Nelson-Siegel)...")
             base_points = build_base_curve(params)
             curve_repo.save_base_points(session, snap.id, base_points)
-            types = {}
-            for p in base_points:
-                types[p["point_type"]] = types.get(p["point_type"], 0) + 1
             log("3/5", f"{len(base_points)} points saved")
-            log("3/5", f"point_types: {types}")
 
             log("4/5", "applying scenarios...")
             scenarios = scenario_repo.list_scenarios(session, only_active=True)

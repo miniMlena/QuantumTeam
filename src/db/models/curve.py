@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from sqlalchemy import (
-    BigInteger, Date, ForeignKey, Integer, Numeric, String, Text,
+    BigInteger, Date, ForeignKey, Numeric, String, Text,
     TIMESTAMP, UniqueConstraint, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,15 +47,15 @@ class CurveSnapshot(Base):
 
 class BaseCurvePoint(Base):
     __tablename__ = "base_curve_point"
-    __table_args__ = (UniqueConstraint("snapshot_id", "tenor_months"),)
+    __table_args__ = (UniqueConstraint("snapshot_id", "bucket_code"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     snapshot_id: Mapped[int] = mapped_column(
         ForeignKey("curve_snapshot.id", ondelete="CASCADE"), nullable=False
     )
-    tenor_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    bucket_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
-    point_type: Mapped[str] = mapped_column(String(20), nullable=False)
 
     snapshot: Mapped[CurveSnapshot] = relationship(back_populates="base_points")
 
@@ -63,7 +63,7 @@ class BaseCurvePoint(Base):
 class ShiftedCurvePoint(Base):
     __tablename__ = "shifted_curve_point"
     __table_args__ = (
-        UniqueConstraint("snapshot_id", "scenario_id", "tenor_months"),
+        UniqueConstraint("snapshot_id", "scenario_id", "bucket_code"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -73,9 +73,9 @@ class ShiftedCurvePoint(Base):
     scenario_id: Mapped[int] = mapped_column(
         ForeignKey("scenario.id", ondelete="CASCADE"), nullable=False
     )
-    tenor_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    bucket_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     shifted_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
     shift_bp: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
-    point_type: Mapped[str] = mapped_column(String(20), nullable=False)
 
     snapshot: Mapped[CurveSnapshot] = relationship(back_populates="shifted_points")
