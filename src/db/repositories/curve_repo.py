@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from sqlalchemy import select, desc
+from sqlalchemy import delete, select, desc
 from sqlalchemy.orm import Session
 from db.models import (
     CurveSnapshot, BaseCurvePoint, ShiftedCurvePoint,
@@ -37,6 +37,13 @@ def mark_snapshot_status(
         return
     snap.status = status
     snap.error_message = error
+    session.commit()
+
+
+def delete_curve_points(session: Session, snapshot_id: int) -> None:
+    """Удалить рассчитанные точки снимка перед пересчётом."""
+    session.execute(delete(BaseCurvePoint).where(BaseCurvePoint.snapshot_id == snapshot_id))
+    session.execute(delete(ShiftedCurvePoint).where(ShiftedCurvePoint.snapshot_id == snapshot_id))
     session.commit()
 
 
