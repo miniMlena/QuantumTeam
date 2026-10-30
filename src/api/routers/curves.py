@@ -1,10 +1,29 @@
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from sqlalchemy.orm import Session
 from api.deps import get_db
 from api.schemas.curve import CurvePointOut, ShiftedPointOut, SnapshotOut
 from db.repositories import curve_repo, scenario_repo
 
 router = APIRouter(prefix="/curves", tags=["curves"])
+
+
+@router.get("", response_model=list[SnapshotOut])
+def list_snapshots(db: Session = Depends(get_db)):
+    return curve_repo.list_snapshots(db)
+
+
+@router.post("/rebuild")
+def calculate_moex():
+    """Загрузить MOEX и выполнить существующий расчёт для демонстрации."""
+    from worker.tasks import fetch_and_build_today
+
+    try:
+        return fetch_and_build_today()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Не удалось получить или рассчитать данные MOEX. Попробуйте позже."
+        ) from exc
 
 
 @router.get("/latest", response_model=SnapshotOut)

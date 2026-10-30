@@ -113,3 +113,13 @@ def get_shifted_points(
         )
         .order_by(ShiftedCurvePoint.tenor_months)
     ))
+
+
+def list_snapshots(session: Session) -> list[CurveSnapshot]:
+    """Последние 100 готовых снимков для демонстрационной страницы."""
+    return list(session.scalars(
+        select(CurveSnapshot)
+        .where(CurveSnapshot.status == "built")
+        .order_by(desc(CurveSnapshot.trade_date), desc(CurveSnapshot.fetched_at))
+        .limit(100)
+    ))

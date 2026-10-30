@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Кривые ставок — QuantumTeam</title>
+<link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+</head>
+<body><main>
+<header><div><p class="eyebrow">QUANTUMTEAM · IRRBB</p><h1>Кривые ставок</h1><p class="muted">Базовая кривая MOEX и сценарии сдвига</p></div><a href="/docs">API ↗</a></header>
+<section class="panel controls" aria-label="Параметры отображения">
+<label>Дата расчёта<select id="snapshot" disabled><option value="">Загрузка…</option></select></label>
+<label>Сценарий<select id="scenario" disabled><option value="">Загрузка…</option></select></label>
+<button id="refresh" type="button" disabled>Обновить</button>
+<button id="calculate" class="primary" type="button" disabled>Рассчитать MOEX</button>
+</section>
+<p id="status" role="status" aria-live="polite">Загрузка данных…</p><p id="error" role="alert" hidden></p>
+<section class="panel chart-panel" aria-labelledby="chart-heading">
+<div class="chart-heading"><h2 id="chart-heading">Доходность по срокам</h2><div class="legend"><span><i class="base"></i>Базовая</span><span><i class="shifted"></i>Сценарий</span></div></div>
+<p id="empty">Нет данных для отображения. Нажмите «Рассчитать MOEX».</p>
+<svg id="chart" viewBox="0 0 900 330" role="img" aria-label="График базовой и сдвинутой кривой" hidden></svg>
+<p class="note">Ставки — непрерывные, % годовых. Наведите на точку для просмотра значения.</p>
+</section>
+<section class="panel" aria-labelledby="table-heading"><h2 id="table-heading">Значения по срокам</h2>
+<div class="table-scroll"><table><thead><tr><th scope="col">Срок</th><th scope="col">Базовая, %</th><th scope="col">Сценарий, %</th><th scope="col">Сдвиг, б.п.</th></tr></thead><tbody id="points"><tr><td colspan="4" class="muted">Нет данных</td></tr></tbody></table></div>
+</section>
+<footer>Источник: MOEX · Сценарии 8-МР (2020) / IRRBB (2016)</footer>
+</main></body></html>
