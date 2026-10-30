@@ -48,3 +48,11 @@ def get_shift_map(session: Session, scenario_id: int) -> dict[int, float]:
         select(ScenarioShift).where(ScenarioShift.scenario_id == scenario_id)
     )
     return {r.tenor_months: float(r.shift_bp) for r in rows}
+
+def ensure_default_scenarios(session: Session) -> None:
+    """Создать отсутствующие IRRBB RUB сценарии, сохраняя пользовательские."""
+    from domain.curve.scenarios import default_scenarios
+
+    for definition in default_scenarios():
+        if get_scenario_by_code(session, definition["code"]) is None:
+            create_scenario(session, **definition)

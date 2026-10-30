@@ -4,12 +4,14 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CurvePointOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     tenor_months: int
     rate: Decimal
     point_type: str
 
 
 class ShiftedPointOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     tenor_months: int
     shifted_rate: Decimal
     shift_bp: Decimal

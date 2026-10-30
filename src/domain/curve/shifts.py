@@ -1,57 +1,63 @@
-"""
-Применение сценариев сдвига к базовой кривой.
-"""
-from domain.constants import STANDARD_TENORS_MONTHS
+"""Применение пользовательских и стандартных сдвигов к непрерывным ставкам."""
+from domain.curve.interpolation import _linear_at
+from domain.curve.scenarios import build_irrbb_shift_map
+from domain.curve.validation import finite_number, nonnegative_number
 
 
 def apply_shift(
-    base_points: list[dict], shift_map: dict[int, float]
+    base_points: list[dict], shift_map: dict[int, float],
+    rate_floor: float | None = None,
 ) -> list[dict]:
-    """
-    base_points: [{"tenor_months": int, "rate": float, "point_type": str}, ...]
-    shift_map:   {tenor_months: shift_bp}  — сдвиг в базисных пунктах
+    """Сдвиги в б.п., ставки в долях. Между узлами — линейно, вне — крайний сдвиг.
 
-    Возвращает список сдвинутых точек:
-      [{"tenor_months": int, "shifted_rate": float,
-        "shift_bp": float, "point_type": str}, ...]
-
-    point_type наследуется от базовой точки: сдвиг не меняет
-    природу точки (интерполированная остаётся интерполированной).
+    Ограничение ставки снизу применяется только при явном rate_floor.
+    shift_bp в результате — фактически применённый сдвиг после ограничения.
     """
+    if rate_floor is not None:
+        rate_floor = finite_number(rate_floor, "rate_floor")
+    nodes = sorted(
+        (nonnegative_number(t, "shift tenor"), finite_number(s, "shift_bp"))
+        for t, s in shift_map.items()
+    )
+    xs = [t for t, _ in nodes]
+    ys = [s for _, s in nodes]
     shifted = []
-    for p in base_points:
-        tenor = p["tenor_months"]
-        shift = _interpolate_shift(tenor, shift_map)
-        # shift_bp в доли: 1 б.п. = 0.0001
-        new_rate = p["rate"] + shift / 10_000.0
+    for point in base_points:
+        tenor = nonnegative_number(point["tenor_months"], "tenor_months")
+        rate = finite_number(point["rate"], "rate")
+        shift = 0.0 if not nodes else (
+            ys[0] if tenor <= xs[0] else ys[-1] if tenor >= xs[-1]
+            else _linear_at(tenor, xs, ys)
+        )
+        new_rate = finite_number(rate + shift / 10_000.0, "shifted_rate")
+        if rate_floor is not None:
+            new_rate = max(rate_floor, new_rate)
+            shift = (new_rate - rate) * 10_000.0
         shifted.append({
-            "tenor_months": tenor,
-            "shifted_rate": new_rate,
-            "shift_bp": shift,
-            "point_type": p["point_type"],
+            "tenor_months": point["tenor_months"],
+            "shifted_rate": new_rate, "shift_bp": shift,
+            "point_type": point["point_type"],
         })
     return shifted
 
 
 def _interpolate_shift(tenor_months: int, shift_map: dict[int, float]) -> float:
-    """
-    Если для тенора нет явного сдвига в сценарии, линейно интерполируем
-    между ближайшими известными тенорами. За границами берём крайнее значение.
-    """
     if not shift_map:
         return 0.0
-    if tenor_months in shift_map:
-        return shift_map[tenor_months]
+    xs = sorted(shift_map)
+    if tenor_months <= xs[0]:
+        return float(shift_map[xs[0]])
+    if tenor_months >= xs[-1]:
+        return float(shift_map[xs[-1]])
+    return _linear_at(tenor_months, xs, [float(shift_map[t]) for t in xs])
 
-    tenors = sorted(shift_map)
-    if tenor_months <= tenors[0]:
-        return shift_map[tenors[0]]
-    if tenor_months >= tenors[-1]:
-        return shift_map[tenors[-1]]
 
-    for i in range(len(tenors) - 1):
-        t_left, t_right = tenors[i], tenors[i + 1]
-        if t_left < tenor_months < t_right:
-            w = (tenor_months - t_left) / (t_right - t_left)
-            return shift_map[t_left] * (1 - w) + shift_map[t_right] * w
-    return 0.0
+def apply_irrbb_scenario(
+    base_points: list[dict], scenario: str, currency: str = "RUB",
+    rate_floor: float | None = None,
+    shock_sizes: tuple[float, float, float] | None = None,
+) -> list[dict]:
+    """Вычислить формулу IRRBB на каждом сроке без интерполяции формы шока."""
+    tenors = [point["tenor_months"] for point in base_points]
+    shifts = build_irrbb_shift_map(scenario, currency, tenors, shock_sizes)
+    return apply_shift(base_points, shifts, rate_floor)

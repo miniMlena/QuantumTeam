@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, delete
 from sqlalchemy.orm import Session
 from db.models import (
     CurveSnapshot, BaseCurvePoint, ShiftedCurvePoint,
@@ -9,7 +9,17 @@ from db.models import (
 
 def create_snapshot(session: Session, *, trade_date: date, params: dict) -> CurveSnapshot:
     """params: {b1,b2,b3,t1,g1..g9}"""
-    snap = CurveSnapshot(trade_date=trade_date, **params)
+    snap = session.scalar(select(CurveSnapshot).where(
+        CurveSnapshot.trade_date == trade_date,
+        CurveSnapshot.source == "moex_iss",
+    ))
+    if snap is None:
+        snap = CurveSnapshot(trade_date=trade_date, **params)
+    else:
+        for name, value in params.items():
+            setattr(snap, name, value)
+        snap.status = "pending"
+        snap.error_message = None
     session.add(snap)
     session.commit()
     session.refresh(snap)
@@ -45,6 +55,9 @@ def save_base_points(
     snapshot_id: int,
     points: list[dict], # [{tenor_months, rate, point_type}]
 ) -> None:
+    session.execute(delete(BaseCurvePoint).where(
+        BaseCurvePoint.snapshot_id == snapshot_id
+    ))
     session.add_all([
         BaseCurvePoint(
             snapshot_id=snapshot_id,
@@ -63,6 +76,10 @@ def save_shifted_points(
     scenario_id: int,
     points: list[dict], # [{tenor_months, shifted_rate, shift_bp, point_type}]
 ) -> None:
+    session.execute(delete(ShiftedCurvePoint).where(
+        ShiftedCurvePoint.snapshot_id == snapshot_id,
+        ShiftedCurvePoint.scenario_id == scenario_id,
+    ))
     session.add_all([
         ShiftedCurvePoint(
             snapshot_id=snapshot_id,

@@ -1,69 +1,67 @@
-"""
-Построение базовой кривой из параметров Nelson-Siegel.
-Формула NS (с учётом корректирующих членов G1..G9 опускаем —
-их интерпретация зависит от методики MOEX; для прототипа
-используем классическую NS-модель, а G-члены игнорируем).
-"""
+"""Кривая MOEX: Nelson-Siegel и девять гауссовых поправок."""
 import math
-from domain.constants import (
-    STANDARD_TENORS_MONTHS,
-    MOEX_OBSERVED_TENORS_MONTHS,
-)
+
+from domain.constants import STANDARD_TENORS_MONTHS, MOEX_OBSERVED_TENORS_MONTHS
+from domain.curve.validation import finite_number, nonnegative_number
 
 
 def nelson_siegel_rate(
     tenor_years: float, b1: float, b2: float, b3: float, t1: float
 ) -> float:
-    """
-    Классическая формула Нельсона-Сигеля:
-      r(t) = b0 + b1 * ((1 - exp(-t/τ)) / (t/τ))
-                + b2 * ((1 - exp(-t/τ)) / (t/τ) - exp(-t/τ))
-    где b0 = b1 (в терминах MOEX), b1 = b2, b2 = b3, τ = t1.
-    Возвращает ставку в долях (не в процентах).
-    """
-    if tenor_years <= 0:
-        return b1 # предельное значение при t→0
-
-    x = tenor_years / t1 if t1 > 0 else 0.0
+    """Чистая NS-модель. Результат в тех же единицах, что и b1, b2, b3."""
+    t = nonnegative_number(tenor_years, "tenor_years")
+    b1, b2, b3 = (finite_number(v, n) for v, n in zip(
+        (b1, b2, b3), ("b1", "b2", "b3")
+    ))
+    tau = finite_number(t1, "t1")
+    if tau <= 0:
+        raise ValueError("t1 must be positive")
+    x = t / tau
     if x == 0:
-        factor1, factor2 = 1.0, 0.0
-    else:
-        exp_neg = math.exp(-x)
-        factor1 = (1 - exp_neg) / x
-        factor2 = factor1 - exp_neg
-
-    return b1 + b2 * factor1 + b3 * factor2
+        return b1 + b2
+    # expm1 сохраняет точность при малых t/tau.
+    factor = -math.expm1(-x) / x
+    return finite_number(b1 + b2 * factor + b3 * (factor - math.exp(-x)), "rate")
 
 
-def build_base_curve(params: dict) -> list[dict]:
+def moex_rate(tenor_years: float, params: dict) -> float:
+    """Сырые B/G из ISS в б.п.; результат — непрерывная ставка в долях.
+
+    Отсутствующие/NULL G считаются нулевыми поправками.
+    Эффективная годовая доходность из yearyields равна expm1(rate).
     """
-    params: {b1, b2, b3, t1}
-    Возвращает список точек:
-      [{"tenor_months": int, "rate": float, "point_type": str}, ...]
-    point_type:
-      - "observed"     — тенор входит в эталонную сетку MOEX
-      - "interpolated" — между эталонными узлами
-      - "extrapolated" — за пределами эталонной сетки
-    """
-    b1, b2, b3, t1 = params["b1"], params["b2"], params["b3"], params["t1"]
-    min_obs = min(MOEX_OBSERVED_TENORS_MONTHS)
-    max_obs = max(MOEX_OBSERVED_TENORS_MONTHS)
+    t = nonnegative_number(tenor_years, "tenor_years")
+    rate_bp = nelson_siegel_rate(t, *(params[n] for n in ("b1", "b2", "b3", "t1")))
+    center, width = 0.0, 0.6
+    for i in range(1, 10):
+        value = params.get(f"g{i}")
+        g = 0.0 if value is None else finite_number(value, f"g{i}")
+        rate_bp += g * math.exp(-((t - center) / width) ** 2)
+        center += width
+        width *= 1.6
+    return finite_number(rate_bp / 10_000.0, "rate")
 
+
+def build_base_curve(params: dict, target_tenors: list[int] | None = None) -> list[dict]:
+    """Построить кривую на сроках в месяцах, сохраняя формат точек БД.
+
+    point_type описывает положение относительно опубликованной сетки MOEX;
+    все ставки здесь рассчитаны по модели, а не скопированы из котировок.
+    """
+    tenors = STANDARD_TENORS_MONTHS if target_tenors is None else target_tenors
+    min_obs, max_obs = min(MOEX_OBSERVED_TENORS_MONTHS), max(MOEX_OBSERVED_TENORS_MONTHS)
     points = []
-    for tenor_months in STANDARD_TENORS_MONTHS:
-        tenor_years = tenor_months / 12.0
-        rate = nelson_siegel_rate(tenor_years, b1, b2, b3, t1)
+    for tenor in tenors:
+        t = nonnegative_number(tenor, "tenor_months") / 12.0
         points.append({
-            "tenor_months": tenor_months,
-            "rate": rate,
-            "point_type": _classify_point_type(tenor_months, min_obs, max_obs),
+            "tenor_months": tenor,
+            "rate": moex_rate(t, params),
+            "point_type": _classify_point_type(tenor, min_obs, max_obs),
         })
     return points
 
 
-def _classify_point_type(
-    tenor_months: int, min_obs: int, max_obs: int
-) -> str:
+def _classify_point_type(tenor_months: int, min_obs: int, max_obs: int) -> str:
     if tenor_months in MOEX_OBSERVED_TENORS_MONTHS:
         return "observed"
     if tenor_months < min_obs or tenor_months > max_obs:

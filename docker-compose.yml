@@ -116,8 +116,7 @@ services:
       REDIS_PORT: 6379
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./src/domain:/opt/airflow/project/src/domain
-      - ./src/db:/opt/airflow/project/src/db
+      - ./src:/opt/airflow/project/src
     ports:
       - "8080:8080"
     depends_on:

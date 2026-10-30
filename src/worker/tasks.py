@@ -17,22 +17,19 @@ def rebuild_snapshot(snapshot_id: int) -> dict:
             "b1": snap.b1, "b2": snap.b2, "b3": snap.b3, "t1": snap.t1,
             **{f"g{i}": getattr(snap, f"g{i}") for i in range(1, 10)},
         }
+        curve_repo.mark_snapshot_status(session, snapshot_id, "pending")
         base_points = build_base_curve(params)
 
-        session.query(curve_repo.BaseCurvePoint).filter_by(
-            snapshot_id=snapshot_id
-        ).delete()
         curve_repo.save_base_points(session, snapshot_id, base_points)
 
+        scenario_repo.ensure_default_scenarios(session)
         scenarios = scenario_repo.list_scenarios(session, only_active=True)
         for sc in scenarios:
             shift_map = scenario_repo.get_shift_map(session, sc.id)
             shifted = apply_shift(base_points, shift_map)
-            session.query(curve_repo.ShiftedCurvePoint).filter_by(
-                snapshot_id=snapshot_id, scenario_id=sc.id
-            ).delete()
             curve_repo.save_shifted_points(session, snapshot_id, sc.id, shifted)
 
+        curve_repo.mark_snapshot_status(session, snapshot_id, "built")
         return {"status": "ok", "snapshot_id": snapshot_id}
 
 
