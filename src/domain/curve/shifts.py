@@ -8,6 +8,7 @@ def apply_shift(
 ) -> list[dict]:
     """
     base_points: [{"bucket_code": str, "tenor_years": float, "rate": float}, ...]
+                 rate — годовая ставка в процентах
     shift_map:   {tenor_years: shift_bp}  — сдвиг в базисных пунктах
 
     Возвращает список сдвинутых точек:
@@ -18,8 +19,8 @@ def apply_shift(
     for p in base_points:
         tenor = p["tenor_years"]
         shift = _interpolate_shift(tenor, shift_map)
-        # shift_bp в доли: 1 б.п. = 0.0001
-        new_rate = p["rate"] + shift / 10_000.0
+        # ставка в процентах: 1 б.п. = 0.01
+        new_rate = p["rate"] + shift / 100.0
         shifted.append({
             "bucket_code": p["bucket_code"],
             "tenor_years": tenor,

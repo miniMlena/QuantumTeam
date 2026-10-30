@@ -1,7 +1,7 @@
 """
 Клиент MOEX ISS. Скачивает параметры кривой бескупонной доходности (ZCYC).
 """
-from datetime import date, datetime
+from datetime import datetime
 import httpx
 
 MOEX_ZCYC_URL = "https://iss.moex.com/iss/engines/stock/zcyc/securities.json"
@@ -27,13 +27,11 @@ def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
     if params_block is None:
         raise ValueError("MOEX response does not contain curve params")
 
-    trade_date_str = params_block.get("TRADEDATE") or params_block.get("trade_date")
-    trade_date = (
-        datetime.strptime(trade_date_str, "%Y-%m-%d").date()
-        if trade_date_str else date.today()
-    )
+    trade_date_str = params_block.get("tradedate")
+    if not trade_date_str:
+        raise ValueError("Missing tradedate in MOEX response")
 
-    result = {"trade_date": trade_date}
+    result = {"trade_date": datetime.strptime(trade_date_str, "%Y-%m-%d").date()}
     for name in ("b1", "b2", "b3", "t1"):
         key = name.upper()
         if key not in params_block:

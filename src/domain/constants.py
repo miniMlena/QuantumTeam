@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,14 @@ BUCKETS: tuple[Bucket, ...] = (
 )
 
 BUCKETS_BY_CODE: dict[str, Bucket] = {b.code: b for b in BUCKETS}
+
+# В какой точке бакета брать ставку с кривой: "end" — на конце (как в эталонном
+# расчёте: бакет 3y — ставка на 3 года), "mid" — на середине (tenor_years).
+# Срок дисконтирования от этого не зависит: всегда tenor_years.
+RATE_POINT: Literal["end", "mid"] = "end"
+
+# Срок ставки для последнего бакета при RATE_POINT="end": у него нет правой границы
+OPEN_BUCKET_RATE_YEARS = 30.0
 
 # Параметры Nelson-Siegel, которые приходят из MOEX
 NS_PARAM_NAMES = ("b1", "b2", "b3", "t1")
