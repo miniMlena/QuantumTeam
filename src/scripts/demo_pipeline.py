@@ -74,7 +74,7 @@ def main() -> int:
 
         with SessionLocal() as session:
             log("0/5", "ensure default scenarios")
-            ensure_default_scenarios(session)
+            # ensure_default_scenarios(session)
 
             log("1/5", "fetching MOEX curve...")
             params = fetch_curve_from_moex()
