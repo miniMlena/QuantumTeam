@@ -6,6 +6,7 @@ import sys
 import traceback
 
 from db.engine import SessionLocal, init_db
+from db.repositories import portfolio_repo
 from services.curve_pipeline import build_curves, load_curve
 
 
@@ -27,6 +28,8 @@ def main() -> int:
             for code, points in build_curves(session, snap).items():
                 log("2/3", f"  {code}: {points} points")
 
+            created = portfolio_repo.ensure_demo_portfolio(session)
+            log("3/3", f"demo portfolio: {created} positions created")
             log("3/3", f"done. snapshot id = {snap.id}")
 
         return 0

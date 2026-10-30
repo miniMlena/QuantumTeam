@@ -172,6 +172,48 @@ function renderTable(rows) {
   }));
 }
 
+const signed = (value, digits = 1) => `${value > 0 ? "+" : ""}${fmt(value, digits)}`;
+
+function renderResults(results) {
+  const worst = results.economic_capital;
+  const name = (result) => SCENARIO_NAMES[result.code] || result.name;
+  el("capital").textContent = signed(worst.value);
+  el("capital-scenario").textContent =
+    `Худший сценарий: ${SCENARIO_NAMES[worst.scenario_code] || worst.scenario_name}`;
+  el("base-npv").textContent = fmt(results.base_npv, 1);
+  el("base-nii").textContent = fmt(results.base_nii, 1);
+
+  el("result-rows").replaceChildren(...results.scenarios.map((result) => {
+    const isWorst = result.code === worst.scenario_code;
+    const tr = document.createElement("tr");
+    tr.classList.toggle("worst", isWorst);
+    const cells = [
+      isWorst ? `${name(result)} — худший` : name(result),
+      fmt(result.npv, 1), signed(result.delta_npv),
+      fmt(result.nii, 1), signed(result.delta_nii),
+    ];
+    cells.forEach((text, i) => {
+      const td = document.createElement("td");
+      if (i) td.className = "num";
+      td.textContent = text;
+      tr.append(td);
+    });
+    return tr;
+  }));
+  el("risk").hidden = false;
+  el("risk-empty").hidden = true;
+}
+
+async function loadResults() {
+  try {
+    renderResults(await request(`/results?snapshot_id=${snapshot.id}`));
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    el("risk").hidden = true;
+    el("risk-empty").hidden = false;
+  }
+}
+
 async function showScenario() {
   const select = el("scenario");
   if (!snapshot || !select.value) return;
@@ -223,6 +265,7 @@ async function loadLatest() {
   basePoints = await request(`/curves/${snapshot.id}/base`);
   await loadScenarios();
   await showScenario();
+  await loadResults();
 }
 
 async function calculate() {

@@ -31,6 +31,43 @@
       <div id="tooltip" class="tooltip" hidden></div>
     </section>
 
+    <section aria-labelledby="risk-title">
+      <h2 id="risk-title">Процентный риск портфеля</h2>
+      <p id="risk-empty" class="muted">Результатов пока нет</p>
+      <div id="risk" hidden>
+        <div class="stats">
+          <div>
+            <span>ЭКпрбк, млн ₽</span>
+            <strong id="capital"></strong>
+            <small id="capital-scenario"></small>
+          </div>
+          <div>
+            <span>NPV базовый, млн ₽</span>
+            <strong id="base-npv"></strong>
+          </div>
+          <div>
+            <span>NII базовый, млн ₽</span>
+            <strong id="base-nii"></strong>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Сценарий</th>
+                <th scope="col" class="num">NPV</th>
+                <th scope="col" class="num">ΔNPV</th>
+                <th scope="col" class="num">NII</th>
+                <th scope="col" class="num">ΔNII</th>
+              </tr>
+            </thead>
+            <tbody id="result-rows"></tbody>
+          </table>
+        </div>
+        <p class="muted note">Портфель тестовый, суммы в млн ₽. Результат показывает работу расчёта, а не риск реального банка.</p>
+      </div>
+    </section>
+
     <section aria-labelledby="table-title">
       <h2 id="table-title">Значения по бакетам</h2>
       <div class="table-wrap">

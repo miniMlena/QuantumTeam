@@ -105,3 +105,10 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: left; }
 th { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
 .num { text-align: right; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 32px; margin-bottom: 16px; }
+.stats div { display: grid; align-content: start; gap: 2px; }
+.stats span, .stats small { color: var(--text-secondary); font-size: 13px; }
+.stats strong { font-size: 26px; font-variant-numeric: tabular-nums; }
+.note { margin-top: 12px; font-size: 13px; }
+.worst td { font-weight: 600; }

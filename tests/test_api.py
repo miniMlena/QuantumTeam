@@ -23,6 +23,7 @@ if HAS_DEPS:
     from api.deps import get_db
     from api.main import app
     from db.models.base import Base
+    from db.repositories import portfolio_repo
 
 FETCH = "services.curve_pipeline.fetch_curve_from_moex"
 
@@ -76,6 +77,29 @@ class ApiTests(unittest.TestCase):
             f"/api/v1/curves/{snapshot_id}/scenarios/{scenarios[0]['id']}"
         ).json()
         self.assertEqual(len(shifted), 19)
+
+    def test_results_need_portfolio(self):
+        self.calculate()
+        self.assertEqual(self.client.get("/api/v1/results").status_code, 404)
+
+    def test_results_for_demo_portfolio(self):
+        self.calculate()
+        with next(app.dependency_overrides[get_db]()) as session:
+            self.assertEqual(portfolio_repo.ensure_demo_portfolio(session), 8)
+            self.assertEqual(portfolio_repo.ensure_demo_portfolio(session), 0)
+
+        self.assertEqual(len(self.client.get("/api/v1/portfolio").json()), 8)
+        results = self.client.get("/api/v1/results").json()
+        self.assertEqual(len(results["scenarios"]), 6)
+        worst = min(results["scenarios"], key=lambda item: item["delta_npv"])
+        self.assertEqual(results["economic_capital"]["scenario_code"], worst["code"])
+        self.assertEqual(results["economic_capital"]["value"], worst["delta_npv"])
+
+    def test_position_validation(self):
+        response = self.client.post("/api/v1/portfolio", json={
+            "name": "x", "amount": 1, "rate": 1, "maturity_months": 3, "repricing_months": 6,
+        })
+        self.assertEqual(response.status_code, 422)
 
     def test_moex_failure_returns_502(self):
         with patch(FETCH, side_effect=httpx.ConnectError("no network")):
