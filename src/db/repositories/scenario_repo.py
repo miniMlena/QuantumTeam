@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from db.models import Scenario, ScenarioShift
+from domain.curve.scenarios import default_scenarios
 
 
 def list_scenarios(session: Session, only_active: bool = True) -> list[Scenario]:
@@ -33,7 +34,7 @@ def create_scenario(
         is_regulatory=is_regulatory, description=description,
     )
     scenario.shifts = [
-        ScenarioShift(tenor_months=s["tenor_months"], shift_bp=s["shift_bp"])
+        ScenarioShift(tenor_years=s["tenor_years"], shift_bp=s["shift_bp"])
         for s in shifts
     ]
     session.add(scenario)
@@ -42,9 +43,19 @@ def create_scenario(
     return scenario
 
 
-def get_shift_map(session: Session, scenario_id: int) -> dict[int, float]:
-    """Возвращает {tenor_months: shift_bp} для сценария."""
+def ensure_default_scenarios(session: Session) -> list[str]:
+    """Создаёт недостающие стандартные сценарии, возвращает их коды."""
+    created = []
+    for scenario in default_scenarios():
+        if get_scenario_by_code(session, scenario["code"]) is None:
+            create_scenario(session, **scenario)
+            created.append(scenario["code"])
+    return created
+
+
+def get_shift_map(session: Session, scenario_id: int) -> dict[float, float]:
+    """Возвращает {tenor_years: shift_bp} для сценария."""
     rows = session.scalars(
         select(ScenarioShift).where(ScenarioShift.scenario_id == scenario_id)
     )
-    return {r.tenor_months: float(r.shift_bp) for r in rows}
+    return {float(r.tenor_years): float(r.shift_bp) for r in rows}

@@ -1,5 +1,5 @@
 from decimal import Decimal
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.models.base import Base
 
@@ -22,13 +22,13 @@ class Scenario(Base):
 
 class ScenarioShift(Base):
     __tablename__ = "scenario_shift"
-    __table_args__ = (UniqueConstraint("scenario_id", "tenor_months"),)
+    __table_args__ = (UniqueConstraint("scenario_id", "tenor_years"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     scenario_id: Mapped[int] = mapped_column(
         ForeignKey("scenario.id", ondelete="CASCADE"), nullable=False
     )
-    tenor_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     shift_bp: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
 
     scenario: Mapped[Scenario] = relationship(back_populates="shifts")

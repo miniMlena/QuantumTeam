@@ -39,5 +39,25 @@ services:
       postgres:
         condition: service_healthy
 
+  demo-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: demo-api
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      PYTHONPATH: /app/src
+      DATABASE_URL: postgresql+psycopg://user:pass@postgres:5432/irrbb
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   demo_pgdata:

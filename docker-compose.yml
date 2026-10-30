@@ -118,6 +118,7 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./src/domain:/opt/airflow/project/src/domain
       - ./src/db:/opt/airflow/project/src/db
+      - ./src/services:/opt/airflow/project/src/services
     ports:
       - "8080:8080"
     depends_on:

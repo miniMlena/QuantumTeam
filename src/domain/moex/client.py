@@ -5,9 +5,11 @@ from datetime import date, datetime
 import httpx
 
 MOEX_ZCYC_URL = "https://iss.moex.com/iss/engines/stock/zcyc/securities.json"
+CONNECT_TIMEOUT_SECONDS = 3.0
+CONNECT_RETRIES = 3
 
 
-def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
+def fetch_curve_from_moex(trade_date: date | None = None, timeout: float = 15.0) -> dict:
     """
     Возвращает словарь:
       {
@@ -15,11 +17,20 @@ def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
         "b1": float, "b2": float, "b3": float, "t1": float,
         "g1": float, ..., "g9": float,
       }
+    Без trade_date берётся свежая кривая. Если trade_date задана, а кривой
+    за этот день нет (выходной), MOEX вернёт другую дату — это ошибка.
     Бросает httpx.HTTPError при сетевых проблемах,
     ValueError — если ответ не содержит ожидаемых полей.
     """
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.get(MOEX_ZCYC_URL)
+    # Соединение с MOEX иногда зависает: ждём его недолго и подключаемся заново
+    with httpx.Client(
+        timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT_SECONDS),
+        transport=httpx.HTTPTransport(retries=CONNECT_RETRIES),
+    ) as client:
+        query = {"iss.only": "params", "iss.meta": "off"}
+        if trade_date is not None:
+            query["date"] = trade_date.isoformat()
+        resp = client.get(MOEX_ZCYC_URL, params=query)
         resp.raise_for_status()
         payload = resp.json()
 
@@ -27,13 +38,13 @@ def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
     if params_block is None:
         raise ValueError("MOEX response does not contain curve params")
 
-    trade_date_str = params_block.get("TRADEDATE") or params_block.get("trade_date") or params_block.get("tradedate")
-    trade_date = (
-        datetime.strptime(trade_date_str, "%Y-%m-%d").date()
-        if trade_date_str else date.today()
-    )
+    trade_date_str = params_block.get("tradedate")
+    if not trade_date_str:
+        raise ValueError("Missing tradedate in MOEX response")
 
-    result = {"trade_date": trade_date}
+    result = {"trade_date": datetime.strptime(trade_date_str, "%Y-%m-%d").date()}
+    if trade_date is not None and result["trade_date"] != trade_date:
+        raise ValueError(f"MOEX has no curve for {trade_date}")
     for name in ("b1", "b2", "b3", "t1"):
         key = name.upper()
         if key not in params_block:
