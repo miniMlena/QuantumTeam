@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from db.engine import init_db
 from api.routers import curves, scenarios, health
-
+from api.routers import curves, scenarios, health, results, portfolio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,3 +19,5 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(scenarios.router, prefix="/api/v1")
 app.include_router(curves.router, prefix="/api/v1")
+app.include_router(results.router, prefix="/api/v1")
+app.include_router(portfolio.router, prefix="/api/v1")
