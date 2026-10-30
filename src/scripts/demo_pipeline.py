@@ -17,54 +17,6 @@ def log(step: str, msg: str = ""):
     print(f"[{step}] {msg}", flush=True)
 
 
-def ensure_default_scenarios(session):
-    """Создаёт 4 базовых сценария, если их ещё нет."""
-    defaults = [
-        {
-            "code": "parallel_up", "name": "Parallel +100 bp",
-            "scenario_type": "parallel", "is_regulatory": True,
-            "shifts": [{"tenor_years": 0.0028, "shift_bp": 100}],
-        },
-        {
-            "code": "parallel_down", "name": "Parallel -100 bp",
-            "scenario_type": "parallel", "is_regulatory": True,
-            "shifts": [{"tenor_years": 0.0028, "shift_bp": -100}],
-        },
-        {
-            "code": "twist_steep", "name": "Steepener (short -50, long +50)",
-            "scenario_type": "twist", "is_regulatory": False,
-            "shifts": [
-                {"tenor_years": 0.0028, "shift_bp": -50},
-                {"tenor_years": 1,      "shift_bp": -25},
-                {"tenor_years": 5,      "shift_bp": 0},
-                {"tenor_years": 10,     "shift_bp": 25},
-                {"tenor_years": 25,     "shift_bp": 50},
-            ],
-        },
-        {
-            "code": "curvature", "name": "Curvature (belly +50)",
-            "scenario_type": "curvature", "is_regulatory": False,
-            "shifts": [
-                {"tenor_years": 0.0028, "shift_bp": 0},
-                {"tenor_years": 2,      "shift_bp": 50},
-                {"tenor_years": 5,      "shift_bp": 50},
-                {"tenor_years": 10,     "shift_bp": 0},
-                {"tenor_years": 25,     "shift_bp": 0},
-            ],
-        },
-    ]
-    for d in defaults:
-        if scenario_repo.get_scenario_by_code(session, d["code"]) is None:
-            scenario_repo.create_scenario(
-                session,
-                code=d["code"], name=d["name"],
-                scenario_type=d["scenario_type"],
-                is_regulatory=d["is_regulatory"],
-                description=None, shifts=d["shifts"],
-            )
-            log("scenarios", f"created: {d['code']}")
-
-
 def main() -> int:
     try:
         log("0/5", "init_db (create tables if missing)")
@@ -72,7 +24,8 @@ def main() -> int:
 
         with SessionLocal() as session:
             log("0/5", "ensure default scenarios")
-            ensure_default_scenarios(session)
+            for code in scenario_repo.ensure_default_scenarios(session):
+                log("scenarios", f"created: {code}")
 
             log("1/5", "fetching MOEX curve...")
             params = fetch_curve_from_moex()

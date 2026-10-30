@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from db.models import Scenario, ScenarioShift
+from domain.curve.scenarios import default_scenarios
 
 
 def list_scenarios(session: Session, only_active: bool = True) -> list[Scenario]:
@@ -40,6 +41,16 @@ def create_scenario(
     session.commit()
     session.refresh(scenario)
     return scenario
+
+
+def ensure_default_scenarios(session: Session) -> list[str]:
+    """Создаёт недостающие стандартные сценарии, возвращает их коды."""
+    created = []
+    for scenario in default_scenarios():
+        if get_scenario_by_code(session, scenario["code"]) is None:
+            create_scenario(session, **scenario)
+            created.append(scenario["code"])
+    return created
 
 
 def get_shift_map(session: Session, scenario_id: int) -> dict[float, float]:
