@@ -5,6 +5,8 @@ from datetime import datetime
 import httpx
 
 MOEX_ZCYC_URL = "https://iss.moex.com/iss/engines/stock/zcyc/securities.json"
+CONNECT_TIMEOUT_SECONDS = 3.0
+CONNECT_RETRIES = 3
 
 
 def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
@@ -18,8 +20,12 @@ def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
     Бросает httpx.HTTPError при сетевых проблемах,
     ValueError — если ответ не содержит ожидаемых полей.
     """
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.get(MOEX_ZCYC_URL)
+    # Соединение с MOEX иногда зависает: ждём его недолго и подключаемся заново
+    with httpx.Client(
+        timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT_SECONDS),
+        transport=httpx.HTTPTransport(retries=CONNECT_RETRIES),
+    ) as client:
+        resp = client.get(MOEX_ZCYC_URL, params={"iss.only": "params", "iss.meta": "off"})
         resp.raise_for_status()
         payload = resp.json()
 

@@ -1,10 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from sqlalchemy.orm import Session
 from api.deps import get_db
 from api.schemas.curve import CurvePointOut, ShiftedPointOut, SnapshotOut
 from db.repositories import curve_repo, scenario_repo
+from services.curve_pipeline import build_curves, load_curve
 
 router = APIRouter(prefix="/curves", tags=["curves"])
+
+
+@router.post("/calculate", response_model=SnapshotOut)
+def calculate(db: Session = Depends(get_db)):
+    """Загрузить свежую кривую MOEX и рассчитать все сценарии."""
+    try:
+        snap = load_curve(db)
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Не удалось получить данные MOEX. Попробуйте позже."
+        ) from exc
+    build_curves(db, snap)
+    return snap
 
 
 @router.get("/latest", response_model=SnapshotOut)

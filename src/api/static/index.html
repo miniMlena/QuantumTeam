@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IRRBB: кривые и сценарии</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="viz-root">
+    <header>
+      <h1>Кривая доходности и стресс-сценарии</h1>
+      <p id="snapshot" class="muted">Данные загружаются…</p>
+    </header>
+
+    <div class="controls">
+      <label>Сценарий
+        <select id="scenario" disabled></select>
+      </label>
+      <button id="calculate" type="button">Рассчитать MOEX</button>
+      <span id="message" role="status"></span>
+    </div>
+
+    <section aria-labelledby="chart-title">
+      <h2 id="chart-title">Ставка по бакетам, % годовых</h2>
+      <ul class="legend">
+        <li><span class="key key-base"></span>Базовая кривая</li>
+        <li><span class="key key-scenario"></span><span id="legend-scenario">Сценарий</span></li>
+      </ul>
+      <div id="chart" class="chart"></div>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </section>
+
+    <section aria-labelledby="table-title">
+      <h2 id="table-title">Значения по бакетам</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Бакет</th>
+              <th scope="col" class="num">Срок, лет</th>
+              <th scope="col" class="num">База, %</th>
+              <th scope="col" class="num">Сценарий, %</th>
+              <th scope="col" class="num">Сдвиг, б.п.</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

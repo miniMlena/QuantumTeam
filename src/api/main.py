@@ -1,7 +1,12 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from db.engine import init_db
 from api.routers import curves, scenarios, health
+
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
@@ -19,3 +24,6 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(scenarios.router, prefix="/api/v1")
 app.include_router(curves.router, prefix="/api/v1")
+
+# Подключается последним: иначе перехватит пути API
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

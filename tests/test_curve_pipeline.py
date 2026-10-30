@@ -16,7 +16,7 @@ if HAS_DEPS:
     from sqlalchemy.ext.compiler import compiles
     from sqlalchemy.orm import Session
 
-    from db.models import BaseCurvePoint, Scenario, ShiftedCurvePoint
+    from db.models import BaseCurvePoint, CurveSnapshot, Scenario, ShiftedCurvePoint
     from db.models.base import Base
     from services.curve_pipeline import build_curves, load_curve
 
@@ -65,6 +65,21 @@ class CurvePipelineTests(unittest.TestCase):
         self.assertEqual(self.count(BaseCurvePoint), 19)
         self.assertEqual(self.count(ShiftedCurvePoint), 6 * 19)
         self.assertEqual(self.count(Scenario), 6)
+
+    def test_same_date_reuses_snapshot(self):
+        build_curves(self.session, self.snapshot)
+        with patch("services.curve_pipeline.fetch_curve_from_moex", return_value=moex_params()):
+            again = load_curve(self.session)
+        self.assertEqual(again.id, self.snapshot.id)
+        self.assertEqual(again.status, "pending")
+        self.assertEqual(self.count(CurveSnapshot), 1)
+
+    def test_failed_status_on_error(self):
+        with patch("services.curve_pipeline.build_base_curve", side_effect=ValueError("boom")):
+            with self.assertRaises(ValueError):
+                build_curves(self.session, self.snapshot)
+        self.assertEqual(self.snapshot.status, "failed")
+        self.assertEqual(self.snapshot.error_message, "boom")
 
     def test_saved_rate_is_annual_percent(self):
         build_curves(self.session, self.snapshot)

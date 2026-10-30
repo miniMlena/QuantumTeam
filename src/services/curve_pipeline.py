@@ -21,9 +21,20 @@ def load_curve(session: Session) -> CurveSnapshot:
 def build_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
     """
     Построить кривые снимка, заменив уже посчитанные точки.
-    Статус built ставится после сохранения всех сценариев.
+    Статус built ставится после сохранения всех сценариев, при ошибке — failed.
     Возвращает {код сценария: число сдвинутых точек}.
     """
+    try:
+        saved = _save_curves(session, snapshot)
+    except Exception as exc:
+        session.rollback()
+        curve_repo.mark_snapshot_status(session, snapshot.id, "failed", str(exc))
+        raise
+    curve_repo.mark_snapshot_status(session, snapshot.id, "built")
+    return saved
+
+
+def _save_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
     params = {
         "b1": snapshot.b1, "b2": snapshot.b2, "b3": snapshot.b3, "t1": snapshot.t1,
         **{f"g{i}": getattr(snapshot, f"g{i}") for i in range(1, 10)},
@@ -41,5 +52,4 @@ def build_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
         curve_repo.save_shifted_points(session, snapshot.id, scenario.id, shifted)
         saved[scenario.code] = len(shifted)
 
-    curve_repo.mark_snapshot_status(session, snapshot.id, "built")
     return saved
