@@ -27,7 +27,7 @@ def fetch_curve_from_moex(timeout: float = 15.0) -> dict:
     if params_block is None:
         raise ValueError("MOEX response does not contain curve params")
 
-    trade_date_str = params_block.get("TRADEDATE") or params_block.get("trade_date")
+    trade_date_str = params_block.get("TRADEDATE") or params_block.get("trade_date") or params_block.get("tradedate")
     trade_date = (
         datetime.strptime(trade_date_str, "%Y-%m-%d").date()
         if trade_date_str else date.today()
