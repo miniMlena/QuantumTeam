@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from api.deps import get_db
 from api.schemas.curve import CurvePointOut, ShiftedPointOut, SnapshotOut
 from db.repositories import curve_repo, scenario_repo
+from redis import Redis
+from rq import Queue
+from worker.tasks import rebuild_snapshot
 
 router = APIRouter(prefix="/curves", tags=["curves"])
 
@@ -34,3 +37,13 @@ def get_shifted(
     if scenario_repo.get_scenario(db, scenario_id) is None:
         raise HTTPException(status_code=404, detail="Scenario not found")
     return curve_repo.get_shifted_points(db, snapshot_id, scenario_id)
+
+
+redis_conn = Redis(host="redis", port=6379)
+queue = Queue("curves", connection=redis_conn)
+
+
+@router.post("/{snapshot_id}/rebuild", status_code=202)
+def trigger_rebuild(snapshot_id: int):
+    job = queue.enqueue(rebuild_snapshot, snapshot_id, job_timeout="10m")
+    return {"task_id": job.id, "status": "queued"}

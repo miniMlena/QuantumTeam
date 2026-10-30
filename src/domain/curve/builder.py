@@ -21,6 +21,12 @@ def nelson_siegel_rate(
     где b0 = b1 (в терминах MOEX), b1 = b2, b2 = b3, τ = t1.
     Возвращает ставку в долях (не в процентах).
     """
+    tenor_years = float(tenor_years)
+    b1 = float(b1)
+    b2 = float(b2)
+    b3 = float(b3)
+    t1 = float(t1)
+    
     if tenor_years <= 0:
         return b1 # предельное значение при t→0
 
