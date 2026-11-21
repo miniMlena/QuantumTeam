@@ -4,6 +4,7 @@
 """
 import sys
 import traceback
+from datetime import date
 
 from db.engine import SessionLocal, init_db
 from db.repositories import portfolio_repo
@@ -21,7 +22,7 @@ def main() -> int:
 
         with SessionLocal() as session:
             log("1/3", "fetching MOEX curve...")
-            snap = load_curve(session)
+            snap = load_curve(session, date(2026, 10, 2))
             log("1/3", f"snapshot id = {snap.id}, trade_date = {snap.trade_date}")
 
             log("2/3", "building curves...")
