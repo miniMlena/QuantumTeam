@@ -1,7 +1,3 @@
-"""
-API и страница на временной базе SQLite, сеть и PostgreSQL не нужны.
-Нужны зависимости проекта; без них тесты пропускаются.
-"""
 import importlib.util
 from datetime import date
 import unittest

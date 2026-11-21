@@ -1,8 +1,3 @@
-"""
-Дисконтирование сверяется со строками 8–9 эталонного Excel, остальное —
-логика NPV, NII и ЭКпрбк. Эталонные значения и часть проверок перенесены
-из ветки feature/npv-and-dashboard (автор Opik1704).
-"""
 from types import SimpleNamespace
 import unittest
 
