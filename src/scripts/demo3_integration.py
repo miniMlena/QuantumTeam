@@ -71,27 +71,101 @@ def main():
     active = [s['code'] for s in scenarios if s.get('is_active', True)]
     print('  active scenarios:', ', '.join(active) if active else '(none)')
 
-    print('[4/5] Export real MOEX curves...')
-    moex = request(args.url, f'/api/v1/exports/curves/{snapshot_id}/moex.csv', csv_response=True)
-    moex_rows = check_csv(moex, ['trade_date', 'scenario', 'bucket_code', 'tenor_years', 'rate'], label='MOEX')
-    if sum(row['scenario'] == 'base' for row in moex_rows) != len(base):
-        raise RuntimeError('Base curve count differs between API and CSV')
+    
+    print('[4/5] Export real MOEX curves on actual tenors...')
+    moex = request(
+        args.url,
+        f'/api/v1/exports/curves/{snapshot_id}/moex.csv',
+        csv_response=True,
+    )
+    moex_rows = check_csv(
+        moex,
+        ['trade_date', 'scenario', 'tenor_years', 'rate'],
+        label='MOEX term curve',
+    )
 
-    print('[5/5] Export DEMO calculator forecast (NOT financial forecast)...')
-    demo = request(args.url, f'/api/v1/exports/curves/{snapshot_id}/calculator-demo.csv', params={'months': args.months}, csv_response=True)
-    demo_rows = check_csv(demo, ['indicator', 'date', 'rate', 'scenario'], label='Calculator DEMO')
-    if sum(row['scenario'] == 'base' for row in demo_rows) != args.months:
-        raise RuntimeError('Incorrect number of base forecast rows')
+    term_base = [
+        row for row in moex_rows
+        if row['scenario'] == 'base'
+    ]
+    if not term_base:
+        raise RuntimeError('MOEX term curve has no base points')
+
+    print(f'  term curve rows: {len(moex_rows)}')
+    print(f'  base term points: {len(term_base)}')
+
+    print('  Export bucket curves...')
+    buckets = request(
+        args.url,
+        f'/api/v1/exports/curves/{snapshot_id}/buckets.csv',
+        csv_response=True,
+    )
+    bucket_rows = check_csv(
+        buckets,
+        [
+            'trade_date',
+            'scenario',
+            'bucket_code',
+            'tenor_years',
+            'rate',
+        ],
+        label='Bucket curves',
+    )
+
+    bucket_base = [
+        row for row in bucket_rows
+        if row['scenario'] == 'base'
+    ]
+    if len(bucket_base) != len(base):
+        raise RuntimeError(
+            'Base bucket count differs between API and CSV: '
+            f'{len(base)} vs {len(bucket_base)}'
+        )
+
+    print(f'  bucket curve rows: {len(bucket_rows)}')
+    print(f'  base bucket points: {len(bucket_base)}')
+
+    print('[5/5] Export DEMO calculator forecast...')
+    demo = request(
+        args.url,
+        f'/api/v1/exports/curves/{snapshot_id}/calculator-demo.csv',
+        params={'months': args.months},
+        csv_response=True,
+    )
+    demo_rows = check_csv(
+        demo,
+        ['indicator', 'date', 'rate', 'scenario'],
+        label='Calculator DEMO',
+    )
+
+    demo_base = [
+        row for row in demo_rows
+        if row['scenario'] == 'base'
+    ]
+    if len(demo_base) != args.months:
+        raise RuntimeError(
+            'Incorrect number of base forecast rows'
+        )
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
+
     moex_path = out / f'moex_curves_{snapshot_id}.csv'
+    buckets_path = out / f'buckets_{snapshot_id}.csv'
     demo_path = out / f'calculator_DEMO_{snapshot_id}.csv'
+
     moex_path.write_bytes(moex)
+    buckets_path.write_bytes(buckets)
     demo_path.write_bytes(demo)
+
     print(f'  MOEX CSV: {moex_path} ({len(moex_rows)} rows)')
+    print(
+        f'  Buckets CSV: {buckets_path} '
+        f'({len(bucket_rows)} rows)'
+    )
     print(f'  DEMO CSV: {demo_path} ({len(demo_rows)} rows)')
     print('  First calculator row:', demo_rows[0])
+
     print('SUCCESS: API workflow completed; no financial validation of demo indicator rates was performed.')
 
 
