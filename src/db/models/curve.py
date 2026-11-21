@@ -10,7 +10,6 @@ from db.models.base import Base
 
 class CurveSnapshot(Base):
     __tablename__ = "curve_snapshot"
-    __table_args__ = (UniqueConstraint("trade_date", "source"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -38,10 +37,10 @@ class CurveSnapshot(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
     base_points: Mapped[list["BaseCurvePoint"]] = relationship(
-        back_populates="snapshot", cascade="all, delete-orphan"
+        back_populates="snapshot"
     )
     shifted_points: Mapped[list["ShiftedCurvePoint"]] = relationship(
-        back_populates="snapshot", cascade="all, delete-orphan"
+        back_populates="snapshot"
     )
 
 
@@ -51,7 +50,7 @@ class BaseCurvePoint(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     snapshot_id: Mapped[int] = mapped_column(
-        ForeignKey("curve_snapshot.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("curve_snapshot.id", ondelete="RESTRICT"), nullable=False
     )
     bucket_code: Mapped[str] = mapped_column(String(10), nullable=False)
     tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
@@ -68,10 +67,10 @@ class ShiftedCurvePoint(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     snapshot_id: Mapped[int] = mapped_column(
-        ForeignKey("curve_snapshot.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("curve_snapshot.id", ondelete="RESTRICT"), nullable=False
     )
     scenario_id: Mapped[int] = mapped_column(
-        ForeignKey("scenario.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("scenario.id", ondelete="RESTRICT"), nullable=False
     )
     bucket_code: Mapped[str] = mapped_column(String(10), nullable=False)
     tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
@@ -79,3 +78,18 @@ class ShiftedCurvePoint(Base):
     shift_bp: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
 
     snapshot: Mapped[CurveSnapshot] = relationship(back_populates="shifted_points")
+
+
+class TermCurvePoint(Base):
+    """Версия кривой по фактическим срокам; отдельно от расчётных бакетов."""
+    __tablename__ = "term_curve_point"
+    __table_args__ = (UniqueConstraint("snapshot_id", "scenario_code", "tenor_years"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("curve_snapshot.id", ondelete="RESTRICT"), nullable=False
+    )
+    scenario_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
+    rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    shift_bp: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)

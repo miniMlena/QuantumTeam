@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: irrbb
+      TZ: UTC
     ports:
       - "5432:5432"
     volumes:
@@ -30,6 +31,7 @@ services:
     command: python -m scripts.demo_pipeline
     environment:
       PYTHONPATH: /app/src
+      TZ: Europe/Moscow
       DATABASE_URL: postgresql+psycopg://user:pass@postgres:5432/irrbb
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -47,6 +49,7 @@ services:
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000
     environment:
       PYTHONPATH: /app/src
+      TZ: Europe/Moscow
       DATABASE_URL: postgresql+psycopg://user:pass@postgres:5432/irrbb
       REDIS_HOST: redis
       REDIS_PORT: 6379

@@ -1,9 +1,9 @@
 from datetime import date
 from decimal import Decimal
-from sqlalchemy import delete, select, desc, func
+from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 from db.models import (
-    CurveSnapshot, BaseCurvePoint, ShiftedCurvePoint,
+    CurveSnapshot, BaseCurvePoint, ShiftedCurvePoint, TermCurvePoint,
 )
 
 
@@ -13,20 +13,9 @@ SNAPSHOT_SOURCE = "moex_iss"
 def create_snapshot(session: Session, *, trade_date: date, params: dict) -> CurveSnapshot:
     """
     params: {b1,b2,b3,t1,g1..g9}
-    Если снимок за эту дату уже есть, обновляет его и возвращает на расчёт.
+    Каждый импорт создаёт новую версию, включая повторный импорт за ту же дату.
     """
-    snap = session.scalar(select(CurveSnapshot).where(
-        CurveSnapshot.trade_date == trade_date,
-        CurveSnapshot.source == SNAPSHOT_SOURCE,
-    ))
-    if snap is None:
-        snap = CurveSnapshot(trade_date=trade_date, source=SNAPSHOT_SOURCE, **params)
-    else:
-        for name, value in params.items():
-            setattr(snap, name, value)
-        snap.fetched_at = func.now()
-        snap.status = "pending"
-        snap.error_message = None
+    snap = CurveSnapshot(trade_date=trade_date, source=SNAPSHOT_SOURCE, **params)
     session.add(snap)
     session.commit()
     session.refresh(snap)
@@ -41,7 +30,7 @@ def get_latest_snapshot(session: Session) -> CurveSnapshot | None:
     return session.scalar(
         select(CurveSnapshot)
         .where(CurveSnapshot.status == "built")
-        .order_by(desc(CurveSnapshot.trade_date))
+        .order_by(desc(CurveSnapshot.trade_date), desc(CurveSnapshot.id))
         .limit(1)
     )
 
@@ -57,11 +46,18 @@ def mark_snapshot_status(
     session.commit()
 
 
-def delete_curve_points(session: Session, snapshot_id: int) -> None:
-    """Удалить рассчитанные точки снимка перед пересчётом."""
-    session.execute(delete(BaseCurvePoint).where(BaseCurvePoint.snapshot_id == snapshot_id))
-    session.execute(delete(ShiftedCurvePoint).where(ShiftedCurvePoint.snapshot_id == snapshot_id))
-    session.commit()
+def copy_snapshot(session: Session, snapshot: CurveSnapshot) -> CurveSnapshot:
+    """Новый снимок для пересчёта; исходные параметры и результаты не меняются."""
+    params = {name: getattr(snapshot, name) for name in (
+        "b1", "b2", "b3", "t1", *(f"g{i}" for i in range(1, 10))
+    )}
+    return create_snapshot(session, trade_date=snapshot.trade_date, params=params)
+
+
+def list_snapshots(session: Session, limit: int = 100, offset: int = 0):
+    return list(session.scalars(select(CurveSnapshot).order_by(
+        desc(CurveSnapshot.trade_date), desc(CurveSnapshot.id)
+    ).limit(limit).offset(offset)))
 
 
 def save_base_points(
@@ -78,7 +74,7 @@ def save_base_points(
         )
         for p in points
     ])
-    session.commit()
+    session.flush()
 
 
 def save_shifted_points(
@@ -98,7 +94,7 @@ def save_shifted_points(
         )
         for p in points
     ])
-    session.commit()
+    session.flush()
 
 
 def get_base_points(session: Session, snapshot_id: int) -> list[BaseCurvePoint]:
@@ -120,3 +116,25 @@ def get_shifted_points(
         )
         .order_by(ShiftedCurvePoint.tenor_years)
     ))
+
+
+def save_term_points(session: Session, snapshot_id: int, scenario_code: str, points: list[dict]):
+    session.add_all([TermCurvePoint(
+        snapshot_id=snapshot_id, scenario_code=scenario_code,
+        tenor_years=Decimal(str(p["tenor_years"])),
+        rate=Decimal(str(p["rate"])), shift_bp=Decimal(str(p["shift_bp"])),
+    ) for p in points])
+    session.flush()
+
+
+def get_term_points(session: Session, snapshot_id: int, scenario_code: str):
+    return list(session.scalars(select(TermCurvePoint).where(
+        TermCurvePoint.snapshot_id == snapshot_id,
+        TermCurvePoint.scenario_code == scenario_code,
+    ).order_by(TermCurvePoint.tenor_years)))
+
+
+def get_term_scenario_codes(session: Session, snapshot_id: int):
+    return list(session.scalars(select(TermCurvePoint.scenario_code).where(
+        TermCurvePoint.snapshot_id == snapshot_id
+    ).distinct().order_by(TermCurvePoint.scenario_code)))

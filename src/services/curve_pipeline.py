@@ -5,11 +5,13 @@
 from datetime import date
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from db.models import CurveSnapshot
 from db.repositories import curve_repo, scenario_repo
 from domain.curve.builder import build_base_curve
 from domain.curve.shifts import apply_shift
+from domain.curve.term_structure import build_term_curve
 from domain.moex.client import fetch_curve_from_moex
 
 
@@ -22,10 +24,16 @@ def load_curve(session: Session, trade_date: date | None = None) -> CurveSnapsho
 
 def build_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
     """
-    Построить кривые снимка, заменив уже посчитанные точки.
+    Построить новый снимок одной транзакцией. Готовые снимки неизменяемы.
     Статус built ставится после сохранения всех сценариев, при ошибке — failed.
     Возвращает {код сценария: число сдвинутых точек}.
     """
+    scenario_repo.ensure_default_scenarios(session)
+    snapshot = session.scalar(select(CurveSnapshot).where(
+        CurveSnapshot.id == snapshot.id
+    ).with_for_update().execution_options(populate_existing=True))
+    if snapshot.status != "pending":
+        raise ValueError("Snapshot already processed; create a new version for rebuild")
     try:
         saved = _save_curves(session, snapshot)
     except Exception as exc:
@@ -43,15 +51,19 @@ def _save_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
     }
     base_points = build_base_curve(params)
 
-    curve_repo.delete_curve_points(session, snapshot.id)
     curve_repo.save_base_points(session, snapshot.id, base_points)
+    curve_repo.save_term_points(session, snapshot.id, "base", build_term_curve(params))
 
-    scenario_repo.ensure_default_scenarios(session)
     saved = {}
     for scenario in scenario_repo.list_scenarios(session, only_active=True):
+        if scenario.code == "base":
+            raise ValueError("Scenario code 'base' is reserved")
         shift_map = scenario_repo.get_shift_map(session, scenario.id)
         shifted = apply_shift(base_points, shift_map)
         curve_repo.save_shifted_points(session, snapshot.id, scenario.id, shifted)
+        curve_repo.save_term_points(session, snapshot.id, scenario.code, build_term_curve(
+            params, code=scenario.code, regulatory=scenario.is_regulatory, shift_map=shift_map,
+        ))
         saved[scenario.code] = len(shifted)
 
     return saved

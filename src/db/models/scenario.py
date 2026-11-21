@@ -16,7 +16,7 @@ class Scenario(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
     shifts: Mapped[list["ScenarioShift"]] = relationship(
-        back_populates="scenario", cascade="all, delete-orphan"
+        back_populates="scenario"
     )
 
 
@@ -26,7 +26,7 @@ class ScenarioShift(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     scenario_id: Mapped[int] = mapped_column(
-        ForeignKey("scenario.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("scenario.id", ondelete="RESTRICT"), nullable=False
     )
     tenor_years: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
     shift_bp: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)

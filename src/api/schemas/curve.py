@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class CurvePointOut(BaseModel):
@@ -22,3 +22,15 @@ class SnapshotOut(BaseModel):
     trade_date: date
     fetched_at: datetime
     status: str
+
+    @field_validator("fetched_at")
+    @classmethod
+    def utc_timestamp(cls, value: datetime) -> datetime:
+        # SQLite в тестах теряет tzinfo; PostgreSQL TIMESTAMPTZ его сохраняет.
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+class TermPointOut(BaseModel):
+    tenor_years: Decimal
+    rate: Decimal
+    shift_bp: Decimal

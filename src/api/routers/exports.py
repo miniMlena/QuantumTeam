@@ -7,6 +7,7 @@ from api.deps import get_db
 from services.curve_export import (
     export_moex_curves,
     export_calculator_demo,
+    export_bucket_curves,
 )
 
 router = APIRouter(prefix="/exports", tags=["exports"])
@@ -76,3 +77,14 @@ def download_calculator_demo(
         content,
         f"calculator_DEMO_{snapshot_id}.csv",
     )
+
+
+@router.get("/curves/{snapshot_id}/buckets.csv")
+def download_buckets(snapshot_id: int, db: Session = Depends(get_db)):
+    """Расчётные середины бакетов (последняя — 25 лет), отдельно от кривой."""
+    try:
+        content = export_bucket_curves(db, snapshot_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 409,
+                            detail=str(exc)) from exc
+    return _csv_response(content, f"buckets_{snapshot_id}.csv")

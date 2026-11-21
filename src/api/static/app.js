@@ -63,14 +63,14 @@ function renderChart(rows) {
   const ticks = niceTicks(Math.min(...values), Math.max(...values));
   const minY = ticks[0];
   const maxY = ticks[ticks.length - 1];
-  // Бакеты разной длины идут равным шагом: иначе короткие сроки слились бы в одну точку
+  // Сроки идут равным шагом: иначе короткие сроки слились бы в одну точку.
   const x = (i) => CHART.left + i * (plotRight - CHART.left) / (rows.length - 1);
   const y = (v) => plotBottom - (v - minY) * (plotBottom - CHART.top) / (maxY - minY);
 
   const svg = svgNode("svg", {
     viewBox: `0 0 ${CHART.width} ${CHART.height}`,
     role: "img",
-    "aria-label": "График базовой кривой и кривой выбранного сценария по бакетам",
+    "aria-label": "Кривые по фактическим срокам до 30 лет",
   }, container);
 
   ticks.forEach((tick) => {
@@ -126,7 +126,7 @@ function renderChart(rows) {
     tooltip.replaceChildren();
     const title = document.createElement("div");
     title.className = "title";
-    title.textContent = `Бакет ${row.code}, срок ${fmt(row.tenor, 2)} лет`;
+    title.textContent = `Срок ${row.code} (${fmt(row.tenor, 4)} лет)`;
     tooltip.append(title);
     [["key-base", row.base, "%, база"], ["key-scenario", row.scenario, "%, сценарий"]]
       .forEach(([keyClass, value, label]) => {
@@ -218,7 +218,16 @@ async function showScenario() {
   const select = el("scenario");
   if (!snapshot || !select.value) return;
   const current = ++requestId;
-  const shifted = await request(`/curves/${snapshot.id}/scenarios/${select.value}`);
+  const code = select.options[select.selectedIndex].dataset.code;
+  const termOrNull = (path) => request(path).catch((error) => {
+    if (error.status === 404) return null; // Старые версии созданы до появления term-кривой.
+    throw error;
+  });
+  const [shifted, termBase, termShifted] = await Promise.all([
+    request(`/curves/${snapshot.id}/scenarios/${select.value}`),
+    termOrNull(`/curves/${snapshot.id}/term-structure`),
+    termOrNull(`/curves/${snapshot.id}/term-structure?scenario=${encodeURIComponent(code)}`),
+  ]);
   if (current !== requestId) return;
 
   const byCode = new Map(shifted.map((p) => [p.bucket_code, p]));
@@ -230,7 +239,20 @@ async function showScenario() {
     shift: Number(byCode.get(p.bucket_code).shift_bp),
   }));
   el("legend-scenario").textContent = select.options[select.selectedIndex].text;
-  renderChart(rows);
+  if (termBase && termShifted) {
+    const termRows = termBase.map((p, i) => {
+      const tenor = Number(p.tenor_years);
+      return {
+        code: tenor < 0.003 ? "1d" : tenor < 1 ? `${Math.round(tenor * 12)}m` : `${fmt(tenor, tenor % 1 ? 1 : 0)}y`,
+        tenor, base: Number(p.rate), scenario: Number(termShifted[i].rate),
+      };
+    });
+    renderChart(termRows);
+  } else {
+    const hint = document.createElement("p");
+    hint.textContent = "В этой старой версии нет кривой по срокам. Нажмите «Рассчитать MOEX»: создастся новая версия, старая сохранится.";
+    el("chart").replaceChildren(hint);
+  }
   renderTable(rows);
 }
 
@@ -241,6 +263,7 @@ async function loadScenarios() {
   select.replaceChildren(...scenarios.map((scenario) => {
     const option = document.createElement("option");
     option.value = scenario.id;
+    option.dataset.code = scenario.code;
     option.textContent = scenarioName(scenario);
     return option;
   }));
@@ -260,8 +283,11 @@ async function loadLatest() {
     el("chart").replaceChildren(hint);
     return;
   }
-  const date = new Date(`${snapshot.trade_date}T00:00:00`).toLocaleDateString("ru-RU");
-  el("snapshot").textContent = `Кривая MOEX на ${date}, 19 бакетов, сценарии Basel для рубля`;
+  const date = snapshot.trade_date.split("-").reverse().join(".");
+  const loadedAt = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow", dateStyle: "short", timeStyle: "medium",
+  }).format(new Date(snapshot.fetched_at));
+  el("snapshot").textContent = `Кривая MOEX на ${date}, версия #${snapshot.id}; время версии ${loadedAt} МСК (UTC+3)`;
   basePoints = await request(`/curves/${snapshot.id}/base`);
   await loadScenarios();
   await showScenario();

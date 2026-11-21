@@ -54,7 +54,7 @@ def _get_curves(session: Session, snapshot_id: int):
     return snapshot, base, scenarios
 
 
-def export_moex_curves(
+def export_bucket_curves(
     session: Session, snapshot_id: int
 ) -> str:
     """
@@ -98,6 +98,22 @@ def export_moex_curves(
         ],
         rows,
     )
+
+
+def export_moex_curves(session: Session, snapshot_id: int) -> str:
+    """Сохранённые кривые на фактических сроках до 30 лет, ставки в долях."""
+    snapshot = _get_snapshot(session, snapshot_id)
+    codes = curve_repo.get_term_scenario_codes(session, snapshot_id)
+    if "base" not in codes:
+        raise ValueError("No saved term curve; calculate a new snapshot")
+    rows = []
+    for code in codes:
+        for point in curve_repo.get_term_points(session, snapshot_id, code):
+            rows.append([
+                snapshot.trade_date.isoformat(), code,
+                point.tenor_years, point.rate / Decimal("100"),
+            ])
+    return _csv_text(["trade_date", "scenario", "tenor_years", "rate"], rows)
 
 
 def _add_months(start: date, months: int) -> date:

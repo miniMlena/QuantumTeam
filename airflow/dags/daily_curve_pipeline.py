@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+import pendulum
 
 from db.engine import SessionLocal
 from db.repositories import curve_repo
@@ -25,15 +26,17 @@ def _build(**ctx):
     snapshot_id = ctx["ti"].xcom_pull(key="snapshot_id")
     with SessionLocal() as session:
         snap = curve_repo.get_snapshot(session, snapshot_id)
+        if snap.status != "pending":
+            snap = curve_repo.copy_snapshot(session, snap)
         build_curves(session, snap)
-    return snapshot_id
+        return snap.id
 
 
 with DAG(
     dag_id="daily_curve_pipeline",
     description="Ежедневная загрузка MOEX и построение кривых",
-    schedule="0 6 * * 1-5", # рабочие дни в 6:00
-    start_date=datetime(2026, 1, 1),
+    schedule="0 6 * * 1-5", # рабочие дни в 6:00 Europe/Moscow
+    start_date=pendulum.datetime(2026, 1, 1, tz="Europe/Moscow"),
     catchup=False,
     default_args=default_args,
     tags=["irrbb", "market_data"],

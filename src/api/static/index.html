@@ -22,7 +22,8 @@
     </div>
 
     <section aria-labelledby="chart-title">
-      <h2 id="chart-title">Ставка по бакетам, % годовых</h2>
+      <h2 id="chart-title">Кривая до 30 лет, % годовых</h2>
+      <p class="muted">Ставка и шок рассчитаны на указанный срок. Точки сроков показаны с равным шагом.</p>
       <ul class="legend">
         <li><span class="key key-base"></span>Базовая кривая</li>
         <li><span class="key key-scenario"></span><span id="legend-scenario">Сценарий</span></li>
@@ -69,13 +70,14 @@
     </section>
 
     <section aria-labelledby="table-title">
-      <h2 id="table-title">Значения по бакетам</h2>
+      <h2 id="table-title">Расчётные значения по бакетам</h2>
+      <p class="muted">Для NPV используется середина бакета: последний срок — 25 лет. Эта таблица отличается от кривой по фактическим срокам выше.</p>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th scope="col">Бакет</th>
-              <th scope="col" class="num">Срок, лет</th>
+              <th scope="col" class="num">Срок дисконтирования, лет</th>
               <th scope="col" class="num">База, %</th>
               <th scope="col" class="num">Сценарий, %</th>
               <th scope="col" class="num">Сдвиг, б.п.</th>

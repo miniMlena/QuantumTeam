@@ -4,13 +4,15 @@ from services.curve_pipeline import build_curves, load_curve
 
 
 def rebuild_snapshot(snapshot_id: int) -> dict:
-    """Пересчитать базовую и сдвинутые кривые для существующего снимка"""
+    """Пересчитать в новой версии, сохранив исходный снимок."""
     with SessionLocal() as session:
         snap = curve_repo.get_snapshot(session, snapshot_id)
         if snap is None:
             return {"status": "failed", "reason": "snapshot not found"}
-        build_curves(session, snap)
-        return {"status": "ok", "snapshot_id": snapshot_id}
+        new_snapshot = curve_repo.copy_snapshot(session, snap)
+        build_curves(session, new_snapshot)
+        return {"status": "ok", "snapshot_id": new_snapshot.id,
+                "original_snapshot_id": snapshot_id}
 
 
 def fetch_and_build_today() -> dict:

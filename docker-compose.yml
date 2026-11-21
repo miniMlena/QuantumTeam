@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
       POSTGRES_DB: ${POSTGRES_DB:-irrbb}
+      TZ: UTC
     ports:
       - "5432:5432"
     volumes:
@@ -37,6 +38,7 @@ services:
     command: python -c "from db.engine import init_db; init_db()"
     environment:
       PYTHONPATH: /app/src
+      TZ: Europe/Moscow
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-irrbb}
     volumes:
       - ./src:/app/src
@@ -53,6 +55,7 @@ services:
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
       PYTHONPATH: /app/src
+      TZ: Europe/Moscow
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-irrbb}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -75,6 +78,7 @@ services:
     command: rq worker curves --url redis://redis:6379
     environment:
       PYTHONPATH: /app/src
+      TZ: Europe/Moscow
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-irrbb}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -107,6 +111,9 @@ services:
     command: standalone
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      TZ: Europe/Moscow
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Moscow
+      AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: Europe/Moscow
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/airflow

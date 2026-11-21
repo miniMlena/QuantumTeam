@@ -34,8 +34,10 @@ class ApiTests(unittest.TestCase):
         engine = create_engine(
             "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
         )
+        self.addCleanup(engine.dispose)
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+        self.session_factory = session_factory
 
         def override_db():
             with session_factory() as session:
@@ -44,6 +46,7 @@ class ApiTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_db
         self.addCleanup(app.dependency_overrides.clear)
         self.client = TestClient(app)
+        self.addCleanup(self.client.close)
 
     def calculate(self):
         with patch(FETCH, return_value=moex_params()):
@@ -63,7 +66,7 @@ class ApiTests(unittest.TestCase):
         second = self.calculate()
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 200)
-        self.assertEqual(first.json()["id"], second.json()["id"])
+        self.assertNotEqual(first.json()["id"], second.json()["id"])
         self.assertEqual(second.json()["status"], "built")
         self.assertEqual(second.json()["trade_date"], date(2026, 8, 31).isoformat())
 
@@ -77,6 +80,36 @@ class ApiTests(unittest.TestCase):
             f"/api/v1/curves/{snapshot_id}/scenarios/{scenarios[0]['id']}"
         ).json()
         self.assertEqual(len(shifted), 19)
+        # Старый расчёт остаётся доступен после повторного импорта.
+        self.assertEqual(len(self.client.get(f"/api/v1/curves/{first.json()['id']}/base").json()), 19)
+        history = self.client.get("/api/v1/curves/history").json()
+        self.assertEqual([s["id"] for s in history], [second.json()["id"], first.json()["id"]])
+        term = self.client.get(f"/api/v1/curves/{snapshot_id}/term-structure").json()
+        self.assertEqual(float(term[-1]["tenor_years"]), 30)
+        self.assertTrue(second.json()["fetched_at"].endswith(("Z", "+00:00")))
+
+    def test_curve_csv_reaches_30_and_bucket_csv_keeps_midpoints(self):
+        import csv
+        import io
+        snapshot_id = self.calculate().json()["id"]
+        response = self.client.get(f"/api/v1/exports/curves/{snapshot_id}/moex.csv")
+        self.assertEqual(response.status_code, 200)
+        rows = list(csv.DictReader(io.StringIO(response.text)))
+        self.assertEqual(len(rows), 7 * 19)
+        for code in {r["scenario"] for r in rows}:
+            self.assertEqual(max(float(r["tenor_years"]) for r in rows if r["scenario"] == code), 30)
+        response = self.client.get(f"/api/v1/exports/curves/{snapshot_id}/buckets.csv")
+        self.assertEqual(response.status_code, 200)
+        rows = list(csv.DictReader(io.StringIO(response.text)))
+        self.assertEqual(max(float(r["tenor_years"]) for r in rows), 25)
+
+    def test_history_and_term_errors(self):
+        self.assertEqual(self.client.get("/api/v1/curves/history").json(), [])
+        self.assertEqual(self.client.get("/api/v1/curves/999/term-structure").status_code, 404)
+        snapshot_id = self.calculate().json()["id"]
+        self.assertEqual(self.client.get(
+            f"/api/v1/curves/{snapshot_id}/term-structure?scenario=missing"
+        ).status_code, 404)
 
     def test_results_need_portfolio(self):
         self.calculate()
@@ -116,6 +149,17 @@ class ApiTests(unittest.TestCase):
             response = self.client.post(f"/api/v1/curves/{snapshot_id}/rebuild")
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json(), {"task_id": "job-1", "status": "queued"})
+
+    def test_worker_rebuild_returns_new_version_and_keeps_old(self):
+        from worker.tasks import rebuild_snapshot
+        original_id = self.calculate().json()["id"]
+        old = self.client.get(f"/api/v1/curves/{original_id}/base").json()
+        with patch("worker.tasks.SessionLocal", self.session_factory):
+            result = rebuild_snapshot(original_id)
+        self.assertEqual(result["original_snapshot_id"], original_id)
+        self.assertNotEqual(result["snapshot_id"], original_id)
+        self.assertEqual(self.client.get(f"/api/v1/curves/{original_id}/base").json(), old)
+        self.assertEqual(self.client.get("/api/v1/curves/latest").json()["id"], result["snapshot_id"])
 
     def test_rebuild_of_missing_snapshot(self):
         self.assertEqual(self.client.post("/api/v1/curves/999/rebuild").status_code, 404)

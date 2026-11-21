@@ -16,7 +16,8 @@ if HAS_DEPS:
     from sqlalchemy.ext.compiler import compiles
     from sqlalchemy.orm import Session
 
-    from db.models import BaseCurvePoint, CurveSnapshot, Scenario, ShiftedCurvePoint
+    from db.models import BaseCurvePoint, CurveSnapshot, Scenario, ShiftedCurvePoint, TermCurvePoint
+    from db.repositories import curve_repo
     from db.models.base import Base
     from services.curve_pipeline import build_curves, load_curve
 
@@ -41,6 +42,7 @@ def moex_params():
 class CurvePipelineTests(unittest.TestCase):
     def setUp(self):
         engine = create_engine("sqlite://")
+        self.addCleanup(engine.dispose)
         Base.metadata.create_all(engine)
         self.session = Session(engine)
         self.addCleanup(self.session.close)
@@ -59,20 +61,69 @@ class CurvePipelineTests(unittest.TestCase):
         self.assertEqual(self.count(BaseCurvePoint), 19)
         self.assertEqual(self.count(ShiftedCurvePoint), 6 * 19)
 
-    def test_rebuild_replaces_points(self):
+    def test_rebuild_preserves_previous_version(self):
         build_curves(self.session, self.snapshot)
-        build_curves(self.session, self.snapshot)
-        self.assertEqual(self.count(BaseCurvePoint), 19)
-        self.assertEqual(self.count(ShiftedCurvePoint), 6 * 19)
+        old_rate = curve_repo.get_base_points(self.session, self.snapshot.id)[0].rate
+        new_snapshot = curve_repo.copy_snapshot(self.session, self.snapshot)
+        build_curves(self.session, new_snapshot)
+        self.assertNotEqual(new_snapshot.id, self.snapshot.id)
+        self.assertEqual(self.snapshot.status, "built")
+        self.assertEqual(curve_repo.get_base_points(self.session, self.snapshot.id)[0].rate, old_rate)
+        self.assertEqual(self.count(BaseCurvePoint), 38)
+        self.assertEqual(self.count(ShiftedCurvePoint), 2 * 6 * 19)
+        self.assertEqual(self.count(TermCurvePoint), 2 * 7 * 19)
         self.assertEqual(self.count(Scenario), 6)
 
-    def test_same_date_reuses_snapshot(self):
+    def test_same_date_creates_new_snapshot(self):
         build_curves(self.session, self.snapshot)
         with patch("services.curve_pipeline.fetch_curve_from_moex", return_value=moex_params()):
             again = load_curve(self.session)
-        self.assertEqual(again.id, self.snapshot.id)
+        self.assertNotEqual(again.id, self.snapshot.id)
         self.assertEqual(again.status, "pending")
-        self.assertEqual(self.count(CurveSnapshot), 1)
+        self.assertEqual(self.count(CurveSnapshot), 2)
+        build_curves(self.session, again)
+        self.assertEqual(curve_repo.get_latest_snapshot(self.session).id, again.id)
+
+    def test_new_import_does_not_change_old_parameters(self):
+        build_curves(self.session, self.snapshot)
+        old_b1 = self.snapshot.b1
+        changed = moex_params()
+        changed["b1"] += 100
+        with patch("services.curve_pipeline.fetch_curve_from_moex", return_value=changed):
+            new_snapshot = load_curve(self.session)
+        self.session.refresh(self.snapshot)
+        self.assertEqual(self.snapshot.b1, old_b1)
+        self.assertEqual(new_snapshot.b1, old_b1 + 100)
+
+    def test_processed_snapshot_cannot_be_overwritten(self):
+        build_curves(self.session, self.snapshot)
+        with self.assertRaisesRegex(ValueError, "new version"):
+            build_curves(self.session, self.snapshot)
+        self.assertEqual(self.snapshot.status, "built")
+        self.assertEqual(self.count(BaseCurvePoint), 19)
+
+    def test_failure_after_saving_base_rolls_back_all_new_points(self):
+        build_curves(self.session, self.snapshot)
+        new_snapshot = curve_repo.copy_snapshot(self.session, self.snapshot)
+        with patch("services.curve_pipeline.apply_shift", side_effect=ValueError("late failure")):
+            with self.assertRaises(ValueError):
+                build_curves(self.session, new_snapshot)
+        self.assertEqual(new_snapshot.status, "failed")
+        self.assertEqual(curve_repo.get_base_points(self.session, new_snapshot.id), [])
+        self.assertEqual(curve_repo.get_term_points(self.session, new_snapshot.id, "base"), [])
+        self.assertEqual(self.count(BaseCurvePoint), 19)
+        self.assertEqual(self.snapshot.status, "built")
+
+    def test_term_curves_reach_30_but_discount_buckets_stay_25(self):
+        from domain.curve.builder import annual_rate_pct
+        from domain.curve.scenarios import basel_shift_bp
+        build_curves(self.session, self.snapshot)
+        base = curve_repo.get_term_points(self.session, self.snapshot.id, "base")
+        steepener = curve_repo.get_term_points(self.session, self.snapshot.id, "steepener")
+        self.assertEqual(float(base[-1].tenor_years), 30)
+        self.assertAlmostEqual(float(base[-1].rate), annual_rate_pct(30, moex_params()), places=5)
+        self.assertAlmostEqual(float(steepener[-1].shift_bp), basel_shift_bp("steepener", 30), places=4)
+        self.assertEqual(float(curve_repo.get_base_points(self.session, self.snapshot.id)[-1].tenor_years), 25)
 
     def test_failed_status_on_error(self):
         with patch("services.curve_pipeline.build_base_curve", side_effect=ValueError("boom")):

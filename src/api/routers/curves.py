@@ -1,13 +1,13 @@
 from datetime import date
 from os import getenv
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 import httpx
 from redis import Redis
 from rq import Queue
 from sqlalchemy.orm import Session
 from api.deps import get_db
-from api.schemas.curve import CurvePointOut, ShiftedPointOut, SnapshotOut
+from api.schemas.curve import CurvePointOut, ShiftedPointOut, SnapshotOut, TermPointOut
 from db.repositories import curve_repo, scenario_repo
 from services.curve_pipeline import build_curves, load_curve
 from worker.tasks import rebuild_snapshot
@@ -34,6 +34,23 @@ def get_latest(db: Session = Depends(get_db)):
     if snap is None:
         raise HTTPException(status_code=404, detail="No snapshots yet")
     return snap
+
+
+@router.get("/history", response_model=list[SnapshotOut])
+def get_history(limit: int = Query(100, ge=1, le=1000),
+                offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    return curve_repo.list_snapshots(db, limit, offset)
+
+
+@router.get("/{snapshot_id}/term-structure", response_model=list[TermPointOut])
+def get_term_structure(snapshot_id: int, scenario: str = "base", db: Session = Depends(get_db)):
+    snap = curve_repo.get_snapshot(db, snapshot_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    points = curve_repo.get_term_points(db, snapshot_id, scenario)
+    if not points:
+        raise HTTPException(status_code=404, detail="No saved term curve; calculate a new snapshot")
+    return points
 
 
 @router.get("/{snapshot_id}/base", response_model=list[CurvePointOut])
