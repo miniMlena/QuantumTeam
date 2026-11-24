@@ -1,9 +1,3 @@
-"""
-Сверка с эталонным расчётом заказчика (Excel, лист «3108», 31.08.2026).
-Сеть не нужна: параметры MOEX сохранены в tests/fixtures.
-Запуск из корня проекта:
-  PYTHONPATH=src python3 -m unittest discover -s tests -v
-"""
 import json
 import math
 from decimal import Decimal
