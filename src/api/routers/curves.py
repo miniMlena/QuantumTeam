@@ -16,14 +16,36 @@ router = APIRouter(prefix="/curves", tags=["curves"])
 
 
 @router.post("/calculate", response_model=SnapshotOut)
-def calculate(trade_date: date | None = None, db: Session = Depends(get_db)):
-    """Загрузить кривую MOEX (свежую или за trade_date) и рассчитать все сценарии."""
+def calculate(
+    trade_date: date | None = None,
+    force_refresh: bool = False,
+    db: Session = Depends(get_db),
+):
+    """
+    Построить кривые на основе параметров MOEX.
+
+    Для указанной даты используются сохранённые
+    параметры, если они доступны в БД.
+
+    force_refresh=True позволяет принудительно
+    загрузить параметры с MOEX.
+    """
     try:
-        snap = load_curve(db, trade_date)
+        snap = load_curve(
+            db,
+            trade_date,
+            force_refresh=force_refresh,
+        )
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(
-            status_code=502, detail="Не удалось получить данные MOEX. Попробуйте позже."
+            status_code=502,
+            detail=(
+                "Не удалось получить данные MOEX. "
+                "Попробуйте позже или выберите "
+                "ранее загруженную дату."
+            ),
         ) from exc
+
     build_curves(db, snap)
     return snap
 

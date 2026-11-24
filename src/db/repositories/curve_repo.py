@@ -138,3 +138,18 @@ def get_term_scenario_codes(session: Session, snapshot_id: int):
     return list(session.scalars(select(TermCurvePoint.scenario_code).where(
         TermCurvePoint.snapshot_id == snapshot_id
     ).distinct().order_by(TermCurvePoint.scenario_code)))
+
+def get_snapshot_by_date(
+    session: Session,
+    trade_date: date,
+) -> CurveSnapshot | None:
+    return session.scalar(
+        select(CurveSnapshot)
+        .where(
+            CurveSnapshot.trade_date == trade_date,
+            CurveSnapshot.source == SNAPSHOT_SOURCE,
+            CurveSnapshot.status == "built",
+        )
+        .order_by(desc(CurveSnapshot.id))
+        .limit(1)
+    )

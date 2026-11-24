@@ -15,11 +15,41 @@ from domain.curve.term_structure import build_term_curve
 from domain.moex.client import fetch_curve_from_moex
 
 
-def load_curve(session: Session, trade_date: date | None = None) -> CurveSnapshot:
-    """Скачать параметры MOEX (свежие или за trade_date) и создать снимок."""
+def load_curve(
+    session: Session,
+    trade_date: date | None = None,
+    *,
+    force_refresh: bool = False,
+) -> CurveSnapshot:
+    """
+    Загрузить параметры кривой MOEX.
+
+    Если за указанную дату есть готовый снимок,
+    использовать сохранённые параметры.
+
+    force_refresh=True принудительно загружает
+    параметры с MOEX.
+
+    Каждый вызов создаёт новую версию снимка.
+    """
+    if trade_date is not None and not force_refresh:
+        existing = curve_repo.get_snapshot_by_date(
+            session, trade_date
+        )
+
+        if existing is not None:
+            return curve_repo.copy_snapshot(
+                session, existing
+            )
+
     params = fetch_curve_from_moex(trade_date)
     trade_date = params.pop("trade_date")
-    return curve_repo.create_snapshot(session, trade_date=trade_date, params=params)
+
+    return curve_repo.create_snapshot(
+        session,
+        trade_date=trade_date,
+        params=params,
+    )
 
 
 def build_curves(session: Session, snapshot: CurveSnapshot) -> dict[str, int]:
