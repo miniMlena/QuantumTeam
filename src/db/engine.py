@@ -10,7 +10,7 @@ DATABASE_URL = getenv(
 
 engine = create_engine(
     DATABASE_URL, pool_pre_ping=True,
-    connect_args={"options": "-c timezone=UTC"} if DATABASE_URL.startswith("postgresql") else {},
+    connect_args={"options": "-c timezone=Europe/Moscow"} if DATABASE_URL.startswith("postgresql") else {},
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 

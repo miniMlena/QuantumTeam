@@ -49,11 +49,28 @@ docker compose up -d --build
 
 ## Время
 
-Соединения PostgreSQL и API используют UTC, `fetched_at` содержит часовой пояс.
+PostgreSQL, его журнал и соединения приложения используют Europe/Moscow.
+Это задано параметрами запуска сервера, поэтому применяется и к существующему
+тому после пересоздания контейнера без удаления тома. Обычный SELECT в psql
+показывает `fetched_at` с отметкой `+03`. TIMESTAMPTZ хранит тот же момент
+времени: старые записи не сдвигаются и не перезаписываются.
+API нормализует время к UTC для передачи (`Z` / `+00:00`); это тот же момент.
 Интерфейс явно переводит время создания версии в **Europe/Moscow (МСК, UTC+3)**,
 независимо от часового пояса браузера. Торговая дата MOEX остаётся датой.
 Airflow запускает DAG по будням в **06:00 Europe/Moscow**; в Compose явно
 заданы часовые пояса планировщика и его интерфейса.
+
+Для демо-базы примените настройки без удаления данных:
+
+```powershell
+docker compose -f docker-compose.demo.yml up -d postgres
+docker compose -f docker-compose.demo.yml up -d --build demo-api
+docker compose -f docker-compose.demo.yml exec postgres psql -U user -d irrbb -c "SHOW timezone; SELECT now(); SELECT id, fetched_at FROM curve_snapshot ORDER BY id DESC LIMIT 10;"
+```
+
+Для основного Compose используются те же команды без `-f docker-compose.demo.yml`,
+а вместо `demo-api` — `api rq-worker airflow`. Не смешивайте демо и основной
+Compose: у них разные тома базы.
 
 ## Тесты
 
